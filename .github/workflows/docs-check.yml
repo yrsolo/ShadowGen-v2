@@ -1,0 +1,21 @@
+name: Docs Check
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "AGENTS.md"
+      - "agent/**"
+      - ".codex/skills/**"
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify key documentation files exist
+        run: |
+          test -f README.md
+          test -f docs/README.md
+          test -f agent/OPERATING_CONTRACT.md

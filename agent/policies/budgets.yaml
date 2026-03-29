@@ -1,0 +1,5 @@
+version: 1
+limits:
+  max_full_repo_rewrites_per_task: 1
+  max_large_doc_restructures_without_request: 0
+  max_optional_full_audits_without_request: 0
