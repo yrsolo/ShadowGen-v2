@@ -1,0 +1,6 @@
+version: 1
+redact:
+  - secrets
+  - tokens
+  - private_keys
+  - prod_credentials

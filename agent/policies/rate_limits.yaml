@@ -1,0 +1,5 @@
+version: 1
+checks:
+  quick_doc_check_default: enabled
+  full_doc_audit_default: disabled
+  full_doc_sync_default: disabled

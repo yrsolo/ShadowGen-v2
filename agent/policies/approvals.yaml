@@ -1,0 +1,8 @@
+version: 1
+destructive_operations:
+  require_explicit_approval: true
+operations:
+  delete_files: explicit
+  mass_docs_restructure: explicit
+  schema_breaking_change: explicit
+  prod_config_change: explicit
