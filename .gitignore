@@ -12,6 +12,7 @@ dist/
 
 # Environment
 .env
+.env.shadowgen
 .env.local
 .env.*.local
 
@@ -27,3 +28,7 @@ Thumbs.db
 artifacts/generated/
 artifacts/tmp/
 *.log
+apps/api/src/*.egg-info/
+.next/
+node_modules/
+.shadowgen-local/

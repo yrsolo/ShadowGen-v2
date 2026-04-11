@@ -1,38 +1,54 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "shadowgen-v2"
 version = "0.1.0"
-description = "Backend-first image processing service for white-background product imagery."
+description = "ShadowGen v2 clean architecture monorepo bootstrap."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115,<1.0",
-  "pillow>=11.0,<12.0",
-  "pydantic-settings>=2.6,<3.0",
-  "python-multipart>=0.0.9,<1.0",
-  "uvicorn>=0.32,<1.0",
+  "boto3>=1.36.0",
+  "docker>=7.1.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.28.0",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.6.0",
+  "python-multipart>=0.0.9",
+  "uvicorn>=0.30.0"
 ]
 
 [project.optional-dependencies]
 dev = [
-  "httpx>=0.28,<1.0",
-  "pytest>=8.3,<9.0",
+  "pytest>=8.4.0",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = [
   ".",
   "apps/api/src",
+  "apps/worker/src",
+  "packages/contracts/src",
+  "packages/domain/src",
+  "packages/application/src",
+  "packages/pipeline/src",
+  "packages/adapters/src",
 ]
 testpaths = [
-  "apps/api/tests",
+  "tests",
 ]
 
 [tool.setuptools]
-package-dir = {"" = "apps/api/src"}
+include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["apps/api/src"]
+where = [
+  "apps/api/src",
+  "apps/worker/src",
+  "packages/contracts/src",
+  "packages/domain/src",
+  "packages/application/src",
+  "packages/pipeline/src",
+  "packages/adapters/src",
+]

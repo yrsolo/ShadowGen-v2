@@ -26,6 +26,20 @@ Documentation is not automatically the truth. Verify important claims against:
 - runtime entrypoints
 - CI scripts
 
+## 3.1 Architecture Rules
+
+This repository follows clean architecture, hexagonal boundaries, and lightweight DDD.
+
+- `apps/api` is transport and composition only
+- `apps/worker` is background execution and composition only
+- `apps/web` talks only to public API contracts
+- `packages/application` may depend on domain abstractions and ports only
+- `packages/domain` contains entities, value objects, and invariants only
+- `packages/adapters` implements ports and transport mapping only
+- legacy ML knowledge is allowed only under `packages/adapters/**/legacy_*`
+- direct imports from adapters into domain or application are forbidden
+- direct imports from legacy code outside the legacy adapter are forbidden
+
 ## 4. Documentation Rules
 
 Keep documentation layered:

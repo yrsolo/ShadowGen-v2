@@ -1,13 +1,11 @@
 # Architecture Index
 
-## What Is Here
+Use this section for structural rules and cross-cutting design decisions.
 
-Technical documents describing how the system is expected to evolve.
+Recommended reading order:
 
-## Main Documents
-
-- [System Overview](system-overview.md)
-- [Ideal Principles](ideal-principles.md)
-- [Backend](backend.md)
-- [Data Model](data-model.md)
-- [Integrations](integrations.md)
+1. [Overview](overview.md)
+2. [Repository Structure](repository-structure.md)
+3. [Pipeline](pipeline.md)
+4. [Caching](caching.md)
+5. [Decisions](decisions.md)

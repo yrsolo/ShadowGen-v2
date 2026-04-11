@@ -1,3 +1,16 @@
-# API Service
+# API App
 
-Backend service for image processing. The current implemented capability is composition of a transparent object onto a white background with a soft shadow.
+FastAPI backend for ShadowGen v2.
+
+Responsibilities:
+
+- validate requests
+- upload source assets
+- create jobs
+- return statuses and results
+- expose engineering-safe diagnostics
+
+Non-responsibilities:
+
+- no image inference
+- no ML logic

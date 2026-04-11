@@ -11,6 +11,9 @@ Keep the repository evolvable, verifiable, and easy to navigate.
 3. Temporary work belongs in `work/`, not in permanent docs.
 4. One document should have one clear role.
 5. Significant work should end with checks and evidence.
+6. Application depends on ports, not infrastructure.
+7. Legacy ML integration is adapter-only.
+8. Service boundaries should prefer low coupling over convenience wiring.
 
 ## Start Gate
 
@@ -20,6 +23,7 @@ Before noticeable work:
 - inspect the documentation map
 - identify the likely source of truth
 - decide whether tracking needs an update
+- check whether the proposed change violates clean, hexagonal, or DDD boundaries
 
 ## Contract Check
 
@@ -29,3 +33,4 @@ Before finalizing:
 - docs are updated or intentionally unchanged
 - evidence is written down
 - relevant checks were executed
+- boundary rules are still respected

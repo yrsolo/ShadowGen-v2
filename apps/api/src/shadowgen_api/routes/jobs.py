@@ -1,0 +1,49 @@
+from fastapi import APIRouter, Depends, HTTPException
+
+from shadowgen_application.dto import CreateJobCommand
+from shadowgen_application.ports import AssetStorePort
+from shadowgen_application.use_cases.create_job import CreateJobUseCase
+from shadowgen_application.use_cases.get_job import GetJobUseCase
+from shadowgen_application.use_cases.get_job_result import GetJobResultUseCase
+from shadowgen_contracts import CreateJobRequest, CreateJobResponse, GetJobResponse, GetJobResultResponse
+from shadowgen_domain import JobNotFoundError
+
+from shadowgen_api.deps import (
+    get_asset_store,
+    get_create_job_use_case,
+    get_get_job_result_use_case,
+    get_get_job_use_case,
+)
+
+router = APIRouter(prefix="/v1/jobs", tags=["jobs"])
+
+
+@router.post("", response_model=CreateJobResponse)
+def create_job(
+    payload: CreateJobRequest,
+    use_case: CreateJobUseCase = Depends(get_create_job_use_case),
+    asset_store: AssetStorePort = Depends(get_asset_store),
+):
+    if asset_store.get_ref(payload.render.source_asset_id) is None:
+        raise HTTPException(status_code=400, detail="Source asset does not exist.")
+
+    job = use_case.execute(CreateJobCommand(request=payload.render))
+    return CreateJobResponse(job_id=job.job_id, status=job.status)
+
+
+@router.get("/{job_id}", response_model=GetJobResponse)
+def get_job(job_id: str, use_case: GetJobUseCase = Depends(get_get_job_use_case)):
+    try:
+        job = use_case.execute(job_id)
+        return GetJobResponse(job=job)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{job_id}/result", response_model=GetJobResultResponse)
+def get_job_result(job_id: str, use_case: GetJobResultUseCase = Depends(get_get_job_result_use_case)):
+    try:
+        job = use_case.execute(job_id)
+        return GetJobResultResponse(job_id=job.job_id, status=job.status, result=job.result)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
