@@ -1,22 +1,47 @@
 # Repository Map
 
-## Goal
+## Main Runtime Paths
 
-Help a new contributor understand where things live.
+- `apps/api/src/shadowgen_api`
+- `apps/web/src`
+- `apps/worker/src/shadowgen_worker`
+- `packages/contracts/src/shadowgen_contracts`
+- `packages/application/src/shadowgen_application`
+- `packages/domain/src/shadowgen_domain`
+- `packages/pipeline/src/shadowgen_pipeline`
+- `packages/adapters/src/shadowgen_adapters`
 
-## Main Directories
+## Where To Look First
 
-- `apps/api` - backend service and image pipeline
-- `packages/schema` - shared contracts and schemas
-- `docs` - permanent repository documentation
-- `work` - current task tracking
-- `agent` - operating rules and policies
-- `.codex/skills` - lightweight procedural skills for repo work
+### If you work on API behavior
 
-## Typical Reading Path
+- `apps/api/src/shadowgen_api/main.py`
+- `apps/api/src/shadowgen_api/routes/`
+- `apps/api/src/shadowgen_api/deps.py`
 
-1. `README.md`
-2. `docs/README.md`
-3. `docs/overview/*`
-4. `docs/architecture/system-overview.md`
-5. `agent/OPERATING_CONTRACT.md`
+### If you work on worker behavior
+
+- `apps/worker/src/shadowgen_worker/main.py`
+- `apps/worker/src/shadowgen_worker/loop.py`
+- `apps/worker/src/shadowgen_worker/control_app.py`
+- `apps/worker/src/shadowgen_worker/control_actions.py`
+
+### If you work on UI behavior
+
+- `apps/web/src/app/page.tsx`
+- `apps/web/src/components/`
+- `apps/web/src/lib/`
+
+### If you work on contracts and business flow
+
+- `packages/contracts/src/shadowgen_contracts/`
+- `packages/application/src/shadowgen_application/`
+- `packages/domain/src/shadowgen_domain/`
+- `packages/pipeline/src/shadowgen_pipeline/`
+
+### If you work on integrations
+
+- `packages/adapters/src/shadowgen_adapters/storage/`
+- `packages/adapters/src/shadowgen_adapters/queue/`
+- `packages/adapters/src/shadowgen_adapters/runtime/`
+- `packages/adapters/src/shadowgen_adapters/legacy_pipeline/`

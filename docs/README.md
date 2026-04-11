@@ -1,35 +1,54 @@
-# Documentation Map
+# Documentation Index
 
-## How To Read
+This documentation is split into two layers:
 
-The docs are arranged from simple to detailed:
+- `overview/` for a fast, accurate understanding of the current system
+- `reference/` for module-by-module and runtime-level details
 
-1. Overview
-2. Architecture
-3. Process
-4. Reference
+Then:
 
-## Quick Entry
+- `architecture/` explains structural decisions and boundaries
+- `contracts/` defines public and internal DTO shapes
+- `roadmap/` keeps migration and evolution notes
 
-- [Product Overview](overview/product.md)
-- [Getting Started](overview/getting-started.md)
+## Start Here
+
+- [Quick Start](overview/quick-start.md)
+- [Runtime Topology](overview/runtime-topology.md)
 - [Repository Map](overview/repository-map.md)
 
 ## Architecture
 
 - [Architecture Index](architecture/README.md)
-- [System Overview](architecture/system-overview.md)
-- [Ideal Principles](architecture/ideal-principles.md)
+- [Architecture Overview](architecture/overview.md)
+- [Repository Structure](architecture/repository-structure.md)
+- [Pipeline](architecture/pipeline.md)
+- [Caching](architecture/caching.md)
+- [Decisions](architecture/decisions.md)
 
-## Process
+## Contracts
 
-- [Process Index](process/README.md)
-- [Agent Workflow](process/agent-workflow.md)
-- [Documentation Governance](process/documentation-governance.md)
+- [API Contract](contracts/api.md)
+- [Jobs Contract](contracts/jobs.md)
+- [ML Black Box Contract](contracts/ml-black-box.md)
+- [New ML Service Contract](contracts/new-ml-service.md)
 
 ## Reference
 
-- [API](reference/api.md)
-- [Config](reference/config.md)
-- [Env](reference/env.md)
-- [Commands](reference/commands.md)
+- [Reference Index](reference/README.md)
+- [Runtime And Scripts](reference/runtime-and-scripts.md)
+- [Modules Index](reference/modules/README.md)
+- [API App](reference/modules/apps-api.md)
+- [Worker App](reference/modules/apps-worker.md)
+- [Web App](reference/modules/apps-web.md)
+- [Contracts Package](reference/modules/packages-contracts.md)
+- [Application Package](reference/modules/packages-application.md)
+- [Domain Package](reference/modules/packages-domain.md)
+- [Pipeline Package](reference/modules/packages-pipeline.md)
+- [Adapters Package](reference/modules/packages-adapters.md)
+- [Schema Package](reference/modules/packages-schema.md)
+
+## Roadmap
+
+- [Bootstrap Plan](roadmap/bootstrap-plan.md)
+- [Migration Phases](roadmap/migration-phases.md)

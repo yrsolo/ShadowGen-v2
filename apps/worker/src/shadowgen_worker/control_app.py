@@ -1,0 +1,239 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from html import escape
+
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse
+
+from shadowgen_application.use_cases.create_worker_action import CreateWorkerActionUseCase
+from shadowgen_contracts import CreateWorkerActionRequest, JobStatus
+
+
+def _duration_ms(job) -> int | None:
+    if job.started_at is None or job.finished_at is None:
+        return None
+    return int((job.finished_at - job.started_at).total_seconds() * 1000)
+
+
+def create_worker_control_app(*, config, runtime, state_service, version_info) -> FastAPI:
+    app = FastAPI(title="ShadowGen Worker Control", version="0.1.0")
+    create_action = CreateWorkerActionUseCase(worker_action_store=runtime.worker_action_store)
+
+    def require_token(x_worker_token: str | None) -> None:
+        if x_worker_token != config.worker_control_token:
+            raise HTTPException(status_code=401, detail="Invalid worker control token.")
+
+    def status_payload() -> dict:
+        state = runtime.worker_state_store.get()
+        recent_jobs = runtime.job_repository.list_recent(limit=20)
+        recent_completed = [
+            {
+                "job_id": job.job_id,
+                "status": job.status.value,
+                "duration_ms": _duration_ms(job),
+                "finished_at": job.finished_at,
+            }
+            for job in recent_jobs
+            if job.status == JobStatus.SUCCEEDED
+        ][:10]
+        recent_failures = [
+            {
+                "job_id": job.job_id,
+                "status": job.status.value,
+                "error_message": job.error.message if job.error else None,
+                "finished_at": job.finished_at,
+            }
+            for job in recent_jobs
+            if job.status == JobStatus.FAILED
+        ][:10]
+        actions = [item.model_dump(mode="json") for item in runtime.worker_action_store.list_recent(limit=10)]
+        heartbeat_age_sec = None
+        if state.updated_at is not None:
+            heartbeat_age_sec = int((datetime.now(timezone.utc) - state.updated_at).total_seconds())
+        return {
+            "worker": state.model_dump(mode="json"),
+            "heartbeat_age_sec": heartbeat_age_sec,
+            "queue": runtime.job_queue.diagnostics().model_dump(mode="json"),
+            "runtime_config": runtime.runtime_config_store.get().model_dump(mode="json"),
+            "recent_completed_jobs": recent_completed,
+            "recent_failures": recent_failures,
+            "recent_actions": actions,
+            "version": version_info.model_dump(mode="json"),
+            "effective_legacy_base_url": state.effective_legacy_base_url or state_service.effective_legacy_base_url(),
+            "storage": {
+                "backend": config.state_backend,
+                "bucket": config.s3_bucket,
+                "prefix": config.s3_prefix if config.state_backend == "s3" else None,
+            },
+        }
+
+    @app.get("/health")
+    def health() -> dict:
+        return {"status": "ok"}
+
+    @app.get("/api/status")
+    def api_status() -> dict:
+        return status_payload()
+
+    @app.get("/api/jobs/recent")
+    def api_jobs_recent() -> list[dict]:
+        return status_payload()["recent_completed_jobs"]
+
+    @app.get("/api/failures/recent")
+    def api_failures_recent() -> list[dict]:
+        return status_payload()["recent_failures"]
+
+    @app.get("/api/actions/recent")
+    def api_actions_recent() -> list[dict]:
+        return status_payload()["recent_actions"]
+
+    @app.post("/api/actions/restart")
+    def api_restart(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
+        require_token(x_worker_token)
+        command = create_action.execute(action=payload.action, requested_by="local-ui", validation_marker="local-token")
+        return {"command": command.model_dump(mode="json")}
+
+    @app.post("/api/actions/update")
+    def api_update(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
+        require_token(x_worker_token)
+        command = create_action.execute(action=payload.action, requested_by="local-ui", validation_marker="local-token")
+        return {"command": command.model_dump(mode="json")}
+
+    @app.post("/api/actions/clear-override")
+    def api_clear_override(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
+        require_token(x_worker_token)
+        command = create_action.execute(action=payload.action, requested_by="local-ui", validation_marker="local-token")
+        return {"command": command.model_dump(mode="json")}
+
+    @app.get("/", response_class=HTMLResponse)
+    def dashboard() -> str:
+        payload = status_payload()
+        recent_jobs_html = "".join(
+            f"<div class='list-row'><span>{escape(item['job_id'])}</span><strong>{item['duration_ms'] or 'n/a'} ms</strong></div>"
+            for item in payload["recent_completed_jobs"]
+        ) or "<div class='list-row'><span>No completed jobs yet</span><strong>idle</strong></div>"
+        recent_failures_html = "".join(
+            f"<div class='list-row'><span>{escape(item['job_id'])}</span><strong>{escape(item['error_message'] or item['status'])}</strong></div>"
+            for item in payload["recent_failures"]
+        ) or "<div class='list-row'><span>No failures</span><strong>ok</strong></div>"
+        recent_actions_html = "".join(
+            f"<div class='list-row'><span>{escape(item['action'])}</span><strong>{escape(item['status'])}</strong></div>"
+            for item in payload["recent_actions"]
+        ) or "<div class='list-row'><span>No actions yet</span><strong>idle</strong></div>"
+        return f"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShadowGen Worker</title>
+  <style>
+    :root {{
+      color-scheme: dark;
+      --bg: #0f1117;
+      --panel: #1c2130;
+      --panel-2: #171b27;
+      --border: rgba(255,255,255,0.09);
+      --muted: #aeb7d0;
+      --text: #f5f7fb;
+      --accent: #7dd3fc;
+      --ok: #71f79f;
+      --warn: #ffb86b;
+      --danger: #ff7d96;
+    }}
+    body {{ margin:0; background: radial-gradient(circle at top, #171a24 0%, var(--bg) 60%); color: var(--text); font: 16px/1.45 Inter, Segoe UI, sans-serif; }}
+    .shell {{ max-width: 1240px; margin: 0 auto; padding: 28px; }}
+    .hero h1 {{ margin: 0 0 8px; font-size: 52px; }}
+    .hero p {{ margin: 0 0 24px; color: var(--muted); }}
+    .grid {{ display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; }}
+    .panel {{ background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); border: 1px solid var(--border); border-radius: 22px; padding: 22px; box-shadow: 0 12px 40px rgba(0,0,0,0.22); }}
+    .section-title {{ margin: 0 0 14px; font-size: 30px; }}
+    .subgrid {{ display: grid; gap: 16px; }}
+    .kv {{ display: grid; gap: 12px; }}
+    .kv div {{ display:flex; justify-content:space-between; gap:16px; padding: 10px 0; border-bottom: 1px solid var(--border); }}
+    .muted {{ color: var(--muted); }}
+    .list {{ display:grid; gap:10px; }}
+    .list-row {{ display:flex; justify-content:space-between; gap:14px; align-items:flex-start; background: rgba(255,255,255,0.03); border:1px solid var(--border); border-radius: 16px; padding: 12px 14px; }}
+    .actions {{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }}
+    button {{ border:1px solid var(--border); background: #222838; color: var(--text); border-radius: 12px; padding: 10px 14px; cursor:pointer; }}
+    button:hover {{ border-color: rgba(125,211,252,0.5); }}
+    .token-row {{ display:flex; gap:10px; margin-top: 14px; }}
+    input {{ flex:1; background:#11151f; border:1px solid var(--border); border-radius: 12px; padding: 10px 14px; color: var(--text); }}
+    .footer {{ margin-top: 18px; color: var(--muted); font-size: 14px; }}
+    @media (max-width: 980px) {{ .grid {{ grid-template-columns: 1fr; }} .hero h1 {{ font-size: 38px; }} }}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>ShadowGen Worker</h1>
+      <p>Local worker control plane with status, recent jobs, failures, and self-managed actions.</p>
+    </section>
+    <section class="grid">
+      <div class="subgrid">
+        <div class="panel">
+          <h2 class="section-title">Runtime</h2>
+          <div class="kv">
+            <div><span class="muted">Status</span><strong>{escape(payload["worker"]["status"])}</strong></div>
+            <div><span class="muted">Heartbeat age</span><strong>{payload["heartbeat_age_sec"] if payload["heartbeat_age_sec"] is not None else "n/a"}s</strong></div>
+            <div><span class="muted">Current job</span><strong>{escape(payload["worker"].get("current_job_id") or "n/a")}</strong></div>
+            <div><span class="muted">Last completed</span><strong>{escape(payload["worker"].get("last_completed_job_id") or "n/a")}</strong></div>
+            <div><span class="muted">Last duration</span><strong>{payload["worker"].get("last_completed_duration_ms") or "n/a"} ms</strong></div>
+            <div><span class="muted">Effective ML URL</span><strong>{escape(payload["effective_legacy_base_url"] or "stub")}</strong></div>
+            <div><span class="muted">Queue backend</span><strong>{escape(payload["queue"]["backend"])}</strong></div>
+            <div><span class="muted">Storage</span><strong>{escape(payload["storage"]["backend"])} / {escape(payload["storage"].get("bucket") or "n/a")}</strong></div>
+            <div><span class="muted">Git</span><strong>{escape(payload["version"].get("git_branch") or "n/a")} @ {escape((payload["version"].get("git_commit") or "n/a")[:12])}</strong></div>
+          </div>
+          <div class="token-row">
+            <input id="token" type="password" placeholder="Worker control token" />
+          </div>
+          <div class="actions">
+            <button onclick="sendAction('/api/actions/restart','restart_worker_process')">Restart process</button>
+            <button onclick="sendAction('/api/actions/update','git_update_rebuild_restart')">Update from git</button>
+            <button onclick="sendAction('/api/actions/clear-override','clear_runtime_override')">Clear ML override</button>
+          </div>
+          <div class="footer">JSON API: <code>/api/status</code>, <code>/api/jobs/recent</code>, <code>/api/failures/recent</code>, <code>/api/actions/recent</code></div>
+        </div>
+        <div class="panel">
+          <h2 class="section-title">Recent Jobs</h2>
+          <div class="list">{recent_jobs_html}</div>
+        </div>
+      </div>
+      <div class="subgrid">
+        <div class="panel">
+          <h2 class="section-title">Recent Failures</h2>
+          <div class="list">{recent_failures_html}</div>
+        </div>
+        <div class="panel">
+          <h2 class="section-title">Actions</h2>
+          <div class="list">{recent_actions_html}</div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    async function sendAction(path, action) {{
+      const token = document.getElementById('token').value;
+      const response = await fetch(path, {{
+        method: 'POST',
+        headers: {{
+          'Content-Type': 'application/json',
+          'X-Worker-Token': token
+        }},
+        body: JSON.stringify({{ action }})
+      }});
+      const text = await response.text();
+      if (!response.ok) {{
+        alert('Action failed: ' + text);
+        return;
+      }}
+      alert('Action submitted.');
+      location.reload();
+    }}
+  </script>
+</body>
+</html>
+"""
+
+    return app

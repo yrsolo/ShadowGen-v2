@@ -2,12 +2,12 @@
 
 ## Steps
 
-1. Create the repository structure and base configs
-2. Add backend entrypoints, settings, and image composition pipeline
-3. Write docs for setup, architecture, and current limitations
-4. Run relevant checks and record evidence
+1. Trace the worker path that writes runtime state into S3/Object Storage during idle polling
+2. Refactor worker state publishing so idle polls use reads and write state only on changes or a throttled heartbeat
+3. Add focused tests for idle heartbeat throttling and runtime-config refresh behavior
+4. Update tracking and any touched worker reference docs
+5. Run targeted verification and record evidence
 
 ## Checks
 
-- `python -m pytest`
-- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_worker_loop_resilience.py tests/unit/test_worker_state_service.py tests/unit/test_s3_runtime_adapters.py -q`

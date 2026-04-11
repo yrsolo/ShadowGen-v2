@@ -1,0 +1,29 @@
+openapi: 3.0.0
+info:
+  title: ShadowGen API Gateway
+  version: 1.0.0
+servers:
+  - url: https://api.shadowgen.solofarm.ru
+paths:
+  /:
+    x-yc-apigateway-any-method:
+      x-yc-apigateway-integration:
+        type: serverless_containers
+        container_id: bba1j0m22k67gb8bsgkk
+        service_account_id: aje1kqd422vq2vefkbbl
+  /{proxy+}:
+    x-yc-apigateway-any-method:
+      parameters:
+        - name: proxy
+          in: path
+          required: false
+          schema:
+            type: string
+            default: "-"
+          style: simple
+          explode: false
+      x-yc-apigateway-integration:
+        type: serverless_containers
+        container_id: bba1j0m22k67gb8bsgkk
+        service_account_id: aje1kqd422vq2vefkbbl
+

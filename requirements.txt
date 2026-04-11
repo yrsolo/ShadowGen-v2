@@ -1,0 +1,9 @@
+fastapi>=0.115.0
+boto3>=1.36.0
+docker>=7.1.0
+httpx>=0.28.0
+pydantic>=2.7.0
+pydantic-settings>=2.6.0
+python-multipart>=0.0.9
+uvicorn>=0.30.0
+pytest>=8.4.0
