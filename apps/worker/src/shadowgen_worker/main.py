@@ -2,7 +2,7 @@ import threading
 
 import uvicorn
 
-from shadowgen_adapters.legacy_pipeline.adapter import LegacyPipelineAdapter
+from shadowgen_adapters.ml_core import MLCorePipelineAdapter
 from shadowgen_adapters.runtime import build_runtime_adapters
 from shadowgen_application.use_cases.process_job import ProcessJobUseCase
 
@@ -53,14 +53,19 @@ def build_worker_runtime(config: WorkerConfig):
     )
 
     def use_case_factory() -> ProcessJobUseCase:
-        pipeline = LegacyPipelineAdapter(
+        pipeline = MLCorePipelineAdapter(
             base_url=resolve_legacy_base_url(config, runtime),
             timeout_sec=config.legacy_ml_timeout_sec,
+            capabilities_refresh_interval_sec=config.capabilities_refresh_interval_sec,
         )
         return ProcessJobUseCase(
             job_repository=runtime.job_repository,
             asset_store=runtime.asset_store,
             pipeline=pipeline,
+            observer=state_service,
+            poll_interval_ms=config.poll_interval_ms,
+            job_ttl_ms=config.job_ttl_ms,
+            max_retries=config.max_retries,
         )
 
     executor = JobExecutor(use_case_factory)
@@ -69,6 +74,7 @@ def build_worker_runtime(config: WorkerConfig):
         executor=executor,
         state_service=state_service,
         poll_interval_sec=config.poll_interval_sec,
+        max_in_flight_jobs=config.max_in_flight_jobs,
     )
     action_executor = WorkerActionExecutor(
         config=config,
@@ -98,6 +104,7 @@ def main():
         f"queue_backend={config.queue_backend} "
         f"s3_bucket={config.s3_bucket} "
         f"legacy_ml_base_url={config.legacy_ml_base_url or 'stub'} "
+        f"max_in_flight_jobs={config.max_in_flight_jobs} "
         f"control_port={config.worker_control_port}",
         flush=True,
     )

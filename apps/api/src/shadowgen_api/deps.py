@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from shadowgen_adapters.legacy_pipeline.adapter import LegacyPipelineAdapter
+from shadowgen_adapters.ml_core import MLCorePipelineAdapter
 from shadowgen_adapters.runtime import build_runtime_adapters
 from shadowgen_application.use_cases import (
     GetJobResultUseCase,
@@ -46,7 +46,11 @@ def get_runtime():
 
 def get_create_job_use_case() -> CreateJobUseCase:
     runtime = get_runtime()
-    return CreateJobUseCase(job_repository=runtime.job_repository, job_queue=runtime.job_queue)
+    return CreateJobUseCase(
+        job_repository=runtime.job_repository,
+        job_queue=runtime.job_queue,
+        asset_store=runtime.asset_store,
+    )
 
 
 def get_get_job_use_case() -> GetJobUseCase:
@@ -67,10 +71,16 @@ def get_upload_asset_use_case() -> UploadAssetUseCase:
 def get_system_diagnostics_use_case() -> GetSystemDiagnosticsUseCase:
     config = get_config()
     runtime = get_runtime()
-    pipeline = LegacyPipelineAdapter(
+    pipeline = MLCorePipelineAdapter(
         base_url=config.legacy_ml_base_url,
         timeout_sec=config.legacy_ml_timeout_sec,
+        capabilities_refresh_interval_sec=45.0,
     )
+    try:
+        capabilities = pipeline.probe(force_refresh=True)
+    except Exception:
+        capabilities = None
+    runtime_state = runtime.worker_state_store.get()
     return GetSystemDiagnosticsUseCase(
         app_env=config.app_env,
         job_repository=runtime.job_repository,
@@ -79,8 +89,12 @@ def get_system_diagnostics_use_case() -> GetSystemDiagnosticsUseCase:
         worker_state_store=runtime.worker_state_store,
         worker_action_store=runtime.worker_action_store,
         worker_runtime=WorkerRuntimeInfo(
-            render_backend="legacy-http" if (runtime.runtime_config_store.get().legacy_ml_base_url or config.legacy_ml_base_url) else "legacy-stub",
-            legacy_base_url=runtime.runtime_config_store.get().legacy_ml_base_url or config.legacy_ml_base_url,
+            render_backend=(
+                runtime_state.capabilities.execution_default_backend
+                if runtime_state.capabilities and runtime_state.capabilities.execution_default_backend
+                else (capabilities.execution_default_backend or capabilities.mode if capabilities is not None else "unknown")
+            ),
+            legacy_base_url=runtime_state.effective_legacy_base_url or runtime.runtime_config_store.get().legacy_ml_base_url or config.legacy_ml_base_url,
             live_legacy_available=pipeline.ping(),
         ),
         storage_runtime=StorageRuntimeInfo(

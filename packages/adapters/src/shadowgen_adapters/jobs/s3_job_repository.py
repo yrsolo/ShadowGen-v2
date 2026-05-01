@@ -30,6 +30,9 @@ class S3JobRepository:
     def update(self, job: JobRecord) -> None:
         self._write(job)
 
+    def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
+        return self._get_indexed(cache_key)
+
     def list_recent(self, limit: int = 20) -> list[JobRecord]:
         prefix = prefixed_key(self.prefix, "jobs/")
         response = self.client.list_objects_v2(Bucket=self.bucket, Prefix=prefix)
@@ -48,7 +51,33 @@ class S3JobRepository:
             Body=dump_json_bytes(job.model_dump(mode="json")),
             ContentType="application/json",
         )
+        if job.request_cache_key:
+            self.client.put_object(
+                Bucket=self.bucket,
+                Key=self._request_cache_index_key(job.request_cache_key),
+                Body=dump_json_bytes({"job_id": job.job_id}),
+                ContentType="application/json",
+            )
 
     def _job_key(self, job_id: str) -> str:
         return prefixed_key(self.prefix, f"jobs/{job_id}.json")
 
+    def _request_cache_index_key(self, cache_key: str) -> str:
+        return prefixed_key(self.prefix, f"jobs-cache/{cache_key}.json")
+
+    def _get_indexed(self, cache_key: str) -> JobRecord | None:
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket,
+                Key=self._request_cache_index_key(cache_key),
+            )
+        except self.client.exceptions.NoSuchKey:
+            return None
+        payload = json.loads(response["Body"].read().decode("utf-8"))
+        job_id = payload.get("job_id")
+        if not job_id:
+            return None
+        job = self.get(job_id)
+        if job is None or job.request_cache_key != cache_key:
+            return None
+        return job

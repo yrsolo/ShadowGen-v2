@@ -14,7 +14,11 @@ def test_file_backed_runtime_supports_separate_instances(tmp_path: Path) -> None
     worker_runtime = build_runtime_adapters(state_backend="file", queue_backend="file", state_dir=str(tmp_path))
 
     asset_ref = api_runtime.asset_store.put_bytes(b"image-bytes", AssetKind.SOURCE, "image/png")
-    create_use_case = CreateJobUseCase(job_repository=api_runtime.job_repository, job_queue=api_runtime.job_queue)
+    create_use_case = CreateJobUseCase(
+        job_repository=api_runtime.job_repository,
+        job_queue=api_runtime.job_queue,
+        asset_store=api_runtime.asset_store,
+    )
     created = create_use_case.execute(CreateJobCommand(request=RenderRequest(source_asset_id=asset_ref.asset_id)))
 
     message = worker_runtime.job_queue.consume()

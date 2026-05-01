@@ -6,20 +6,82 @@ import { AngleSlider } from "../components/angle-slider";
 import { EngineeringPanel } from "../components/engineering-panel";
 import { ResultView } from "../components/result-view";
 import { UploadForm } from "../components/upload-form";
-import { createJob, createWorkerAction, getDiagnostics, getJob, getRuntimeConfig, updateRuntimeConfig, uploadAsset } from "../lib/api-client";
-import { JobRecord, LocalRuntimeConfig, SystemDiagnosticsResponse } from "../lib/types";
+import {
+  createJob,
+  createWorkerAction,
+  getDiagnostics,
+  getJob,
+  getRuntimeConfig,
+  updateRuntimeConfig,
+  uploadAsset
+} from "../lib/api-client";
+import {
+  JobRecord,
+  LocalRuntimeConfig,
+  ShadowModel,
+  SystemDiagnosticsResponse
+} from "../lib/types";
 
-type Tab = "user" | "engineering";
+type InterfaceMode = "min" | "max" | "engineering";
+
 type ShadowDraft = {
+  model: ShadowModel;
   angle_deg: number;
   elevation_deg: number;
 };
 
+type ClientTiming = {
+  upload_ms?: number;
+  create_job_ms?: number;
+  initial_get_job_ms?: number;
+  last_poll_ms?: number;
+  polls?: number;
+  total_until_job_ms?: number;
+  total_until_image_ms?: number;
+  image_after_job_ms?: number;
+  cache_hit?: boolean;
+  reused_upload?: boolean;
+  reused_completed_job?: boolean;
+};
+
+const DEFAULT_ANGLE = 45;
+const DEFAULT_ELEVATION = 35;
+
+function formatDurationMs(value: number | undefined): string {
+  if (value === undefined) {
+    return "n/a";
+  }
+  return `${Math.max(0, Math.round(value))} ms`;
+}
+
+function buildTimingRows(timing: ClientTiming | null): Array<[string, string]> {
+  if (!timing) {
+    return [];
+  }
+  return [
+    ["upload", timing.reused_upload ? "reused" : formatDurationMs(timing.upload_ms)],
+    ["create job", formatDurationMs(timing.create_job_ms)],
+    ["initial get", formatDurationMs(timing.initial_get_job_ms)],
+    ["polls", String(timing.polls ?? 0)],
+    ["last poll", formatDurationMs(timing.last_poll_ms)],
+    ["cache", timing.cache_hit ? "hit" : "miss"],
+    ["job visible", formatDurationMs(timing.total_until_job_ms)],
+    ["image visible", formatDurationMs(timing.total_until_image_ms)],
+    ["image after job", formatDurationMs(timing.image_after_job_ms)]
+  ];
+}
+
+function isJobStillProcessing(job: JobRecord | null): boolean {
+  return Boolean(job && ["queued", "running"].includes(job.status));
+}
+
 export default function HomePage() {
-  const [tab, setTab] = useState<Tab>("user");
+  const [interfaceMode, setInterfaceMode] = useState<InterfaceMode>("min");
   const [file, setFile] = useState<File | null>(null);
-  const [angle, setAngle] = useState(45);
-  const [elevation, setElevation] = useState(45);
+  const [shadowModel, setShadowModel] = useState<ShadowModel>("v1-gan");
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [angle, setAngle] = useState(DEFAULT_ANGLE);
+  const [elevation, setElevation] = useState(DEFAULT_ELEVATION);
   const [job, setJob] = useState<JobRecord | null>(null);
   const [lastCompletedJob, setLastCompletedJob] = useState<JobRecord | null>(null);
   const [diagnostics, setDiagnostics] = useState<SystemDiagnosticsResponse | null>(null);
@@ -28,14 +90,55 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
   const [sourcePreviewUrl, setSourcePreviewUrl] = useState<string | null>(null);
+  const [uploadedSourceAssetId, setUploadedSourceAssetId] = useState<string | null>(null);
+  const [uploadedFileFingerprint, setUploadedFileFingerprint] = useState<string | null>(null);
   const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastRunElapsedMs, setLastRunElapsedMs] = useState<number | null>(null);
+  const [lastClientTiming, setLastClientTiming] = useState<ClientTiming | null>(null);
   const lastSubmittedShadowRef = useRef<ShadowDraft | null>(null);
+  const currentRunStartedAtRef = useRef<number | null>(null);
+  const resultReadyAtRef = useRef<number | null>(null);
+
+  function getFileFingerprint(value: File): string {
+    return [value.name, value.size, value.lastModified, value.type].join(":");
+  }
+
+  function getEffectiveShadowDraft(nextDraft?: Partial<ShadowDraft>): ShadowDraft {
+    const draft: ShadowDraft = {
+      model: nextDraft?.model ?? shadowModel,
+      angle_deg: nextDraft?.angle_deg ?? angle,
+      elevation_deg: nextDraft?.elevation_deg ?? elevation
+    };
+
+    if (draft.model === "v2-diff") {
+      return {
+        model: draft.model,
+        angle_deg: DEFAULT_ANGLE,
+        elevation_deg: DEFAULT_ELEVATION
+      };
+    }
+
+    return draft;
+  }
+
+  function resetSourceSelection() {
+    setFile(null);
+    setJob(null);
+    setUploadedSourceAssetId(null);
+    setUploadedFileFingerprint(null);
+    lastSubmittedShadowRef.current = null;
+    if (sourcePreviewUrl) {
+      URL.revokeObjectURL(sourcePreviewUrl);
+    }
+    setSourcePreviewUrl(null);
+  }
 
   function handleFileSelected(nextFile: File | null) {
     setFile(nextFile);
     setJob(null);
+    setUploadedSourceAssetId(null);
+    setUploadedFileFingerprint(nextFile ? getFileFingerprint(nextFile) : null);
     lastSubmittedShadowRef.current = null;
     if (sourcePreviewUrl) {
       URL.revokeObjectURL(sourcePreviewUrl);
@@ -43,24 +146,51 @@ export default function HomePage() {
     setSourcePreviewUrl(nextFile ? URL.createObjectURL(nextFile) : null);
   }
 
-  async function submitJob(shadow: ShadowDraft) {
+  async function ensureUploadedSourceAssetId(): Promise<string> {
+    if (!file) {
+      throw new Error("Select an image first.");
+    }
+    const fingerprint = getFileFingerprint(file);
+    if (uploadedSourceAssetId && uploadedFileFingerprint === fingerprint) {
+      return uploadedSourceAssetId;
+    }
+    const assetResponse = await uploadAsset(file);
+    setUploadedSourceAssetId(assetResponse.asset.asset_id);
+    setUploadedFileFingerprint(fingerprint);
+    return assetResponse.asset.asset_id;
+  }
+
+  async function submitJob(requestedShadow: ShadowDraft) {
     if (!file) {
       setError("Select an image first.");
       return;
     }
 
+    const shadow = getEffectiveShadowDraft(requestedShadow);
     const startedAt = Date.now();
+    const timing: ClientTiming = {};
+    currentRunStartedAtRef.current = startedAt;
+    resultReadyAtRef.current = null;
     setBusy(true);
     setError(null);
     setProcessingStartedAt(startedAt);
     setElapsedMs(0);
+    setLastClientTiming(null);
+
     try {
-      const assetResponse = await uploadAsset(file);
+      const fingerprint = getFileFingerprint(file);
+      timing.reused_upload = Boolean(uploadedSourceAssetId && uploadedFileFingerprint === fingerprint);
+      const uploadStartedAt = Date.now();
+      const sourceAssetId = await ensureUploadedSourceAssetId();
+      timing.upload_ms = timing.reused_upload ? 0 : Date.now() - uploadStartedAt;
+
+      const createStartedAt = Date.now();
       const createResponse = await createJob({
         render: {
-          source_asset_id: assetResponse.asset.asset_id,
+          source_asset_id: sourceAssetId,
           pipeline_version: "legacy-black-box-v1",
           shadow: {
+            model: shadow.model,
             angle_deg: shadow.angle_deg,
             elevation_deg: shadow.elevation_deg,
             softness: 0.5,
@@ -79,18 +209,45 @@ export default function HomePage() {
           }
         }
       });
+      timing.create_job_ms = Date.now() - createStartedAt;
+
+      if (lastCompletedJob && createResponse.job_id === lastCompletedJob.job_id) {
+        setJob(lastCompletedJob);
+        lastSubmittedShadowRef.current = shadow;
+        const finishedAt = Date.now();
+        timing.cache_hit = true;
+        timing.reused_completed_job = true;
+        timing.total_until_job_ms = finishedAt - startedAt;
+        setLastRunElapsedMs(timing.total_until_job_ms);
+        setLastClientTiming({ ...timing });
+        setProcessingStartedAt(null);
+        return;
+      }
+
+      const getStartedAt = Date.now();
       const currentJob = await getJob(createResponse.job_id);
+      timing.initial_get_job_ms = Date.now() - getStartedAt;
+      timing.cache_hit = currentJob.job.status === "succeeded";
       setJob(currentJob.job);
       lastSubmittedShadowRef.current = shadow;
+
       if (!["queued", "running"].includes(currentJob.job.status)) {
-        setLastRunElapsedMs(Date.now() - startedAt);
+        const finishedAt = Date.now();
+        timing.total_until_job_ms = finishedAt - startedAt;
+        setLastRunElapsedMs(timing.total_until_job_ms);
         setProcessingStartedAt(null);
       }
+
       if (currentJob.job.status === "succeeded" && currentJob.job.result?.images?.length) {
         setLastCompletedJob(currentJob.job);
+        resultReadyAtRef.current = Date.now();
       }
+
+      setLastClientTiming({ ...timing });
     } catch (cause) {
-      setLastRunElapsedMs(Date.now() - startedAt);
+      timing.total_until_job_ms = Date.now() - startedAt;
+      setLastRunElapsedMs(timing.total_until_job_ms);
+      setLastClientTiming({ ...timing });
       setProcessingStartedAt(null);
       setError(cause instanceof Error ? cause.message : "Unknown error");
     } finally {
@@ -99,7 +256,7 @@ export default function HomePage() {
   }
 
   async function handleSubmit() {
-    await submitJob({ angle_deg: angle, elevation_deg: elevation });
+    await submitJob(getEffectiveShadowDraft());
   }
 
   async function refreshDiagnostics() {
@@ -129,7 +286,13 @@ export default function HomePage() {
     }
   }
 
-  async function handleTriggerWorkerAction(action: "restart_worker_process" | "restart_container" | "git_update_rebuild_restart" | "clear_runtime_override") {
+  async function handleTriggerWorkerAction(
+    action:
+      | "restart_worker_process"
+      | "restart_container"
+      | "git_update_rebuild_restart"
+      | "clear_runtime_override"
+  ) {
     setError(null);
     try {
       await createWorkerAction(action);
@@ -140,18 +303,34 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    if (!job || !["queued", "running"].includes(job.status)) {
+    if (!job || !isJobStillProcessing(job)) {
       return;
     }
 
     const timer = window.setInterval(async () => {
       try {
+        const pollStartedAt = Date.now();
         const updated = await getJob(job.job_id);
+        const pollElapsedMs = Date.now() - pollStartedAt;
+
+        setLastClientTiming((current) => ({
+          ...(current ?? {}),
+          polls: (current?.polls ?? 0) + 1,
+          last_poll_ms: pollElapsedMs
+        }));
         setJob(updated.job);
+
         if (updated.job.status === "succeeded" && updated.job.result?.images?.length) {
           setLastCompletedJob(updated.job);
+          const finishedAt = Date.now();
+          resultReadyAtRef.current = finishedAt;
           if (processingStartedAt) {
-            setLastRunElapsedMs(Date.now() - processingStartedAt);
+            const totalUntilJobMs = finishedAt - processingStartedAt;
+            setLastRunElapsedMs(totalUntilJobMs);
+            setLastClientTiming((current) => ({
+              ...(current ?? {}),
+              total_until_job_ms: totalUntilJobMs
+            }));
           }
           setProcessingStartedAt(null);
         } else if (updated.job.status === "failed" || updated.job.status === "canceled") {
@@ -163,10 +342,10 @@ export default function HomePage() {
       } catch {
         window.clearInterval(timer);
       }
-    }, 1500);
+    }, 350);
 
     return () => window.clearInterval(timer);
-  }, [job]);
+  }, [job, processingStartedAt]);
 
   useEffect(() => {
     if (!processingStartedAt) {
@@ -181,17 +360,19 @@ export default function HomePage() {
   }, [processingStartedAt]);
 
   useEffect(() => {
-    refreshDiagnostics();
+    void refreshDiagnostics();
   }, []);
 
   useEffect(() => {
-    const nextShadow = { angle_deg: angle, elevation_deg: elevation };
+    const nextShadow = getEffectiveShadowDraft();
     const lastSubmittedShadow = lastSubmittedShadowRef.current;
 
     if (
+      interfaceMode === "engineering" ||
       !file ||
       lastSubmittedShadow === null ||
       (
+        nextShadow.model === lastSubmittedShadow.model &&
         nextShadow.angle_deg === lastSubmittedShadow.angle_deg &&
         nextShadow.elevation_deg === lastSubmittedShadow.elevation_deg
       )
@@ -204,78 +385,216 @@ export default function HomePage() {
     }, 500);
 
     return () => window.clearTimeout(timer);
-  }, [angle, elevation, file]);
+  }, [angle, elevation, file, shadowModel, interfaceMode]);
 
-  return (
-    <main className="shell">
-      <section className="hero">
-        <h1>Shadow Generator</h1>
-        <p>Upload an image, tune the shadow angle, run the job, and compare source and result previews.</p>
-      </section>
+  const processing = busy || isJobStillProcessing(job);
+  const compactMode = interfaceMode === "min";
+  const modelDescription =
+    shadowModel === "v1-gan"
+      ? "Top view with manual shadow direction."
+      : "Side view with automatic shadow placement.";
 
-      <div className="tab-row">
-        <button className={`tab-button ${tab === "user" ? "active" : ""}`} type="button" onClick={() => setTab("user")}>User</button>
-        <button className={`tab-button ${tab === "engineering" ? "active" : ""}`} type="button" onClick={() => setTab("engineering")}>Engineering</button>
+  const userControls = (
+    <>
+      <div className={`topbar ${compactMode ? "topbar-min" : ""}`}>
+        <h1 className="brand-title">{compactMode ? "SdwGen" : "Shadow Generator"}</h1>
+        <div className="model-toggle" role="tablist" aria-label="Shadow model">
+          <button
+            className={`mode-pill ${shadowModel === "v1-gan" ? "active" : ""}`}
+            type="button"
+            onClick={() => setShadowModel("v1-gan")}
+          >
+            Top
+          </button>
+          <button
+            className={`mode-pill ${shadowModel === "v2-diff" ? "active" : ""}`}
+            type="button"
+            onClick={() => setShadowModel("v2-diff")}
+          >
+            Side
+          </button>
+        </div>
       </div>
+
+      {!compactMode ? (
+        <section className="hero hero-inline">
+          <p>{modelDescription} Switch to `Min` for the compact mobile flow, or keep `Max` for the full desktop workspace.</p>
+        </section>
+      ) : null}
 
       {error ? <div className="error-box">{error}</div> : null}
 
-      {tab === "user" ? (
-        <section className="layout-grid">
-          <div className="panel control-stack">
-            <UploadForm
-              onFileSelected={handleFileSelected}
-              selectedFileName={file?.name ?? null}
-              previewUrl={sourcePreviewUrl}
-            />
-            <AngleSlider
-              label="Shadow angle"
-              min={0}
-              max={360}
-              value={angle}
-              valueLabel={`${angle} deg`}
-              onChange={setAngle}
-            />
-            <AngleSlider
-              label="Light elevation"
-              min={0}
-              max={90}
-              value={elevation}
-              valueLabel={`${elevation} deg`}
-              onChange={setElevation}
-            />
-            <div className="button-row">
-              <button className="primary-button" type="button" onClick={handleSubmit} disabled={busy}>
-                {busy ? "Processing..." : "Process"}
-              </button>
-              <button className="secondary-button" type="button" onClick={() => setAngle((value) => Math.max(0, value - 20))}>
-                -20
-              </button>
-              <button className="secondary-button" type="button" onClick={() => setAngle((value) => Math.min(360, value + 20))}>
-                +20
-              </button>
-            </div>
-          </div>
-          <ResultView
-            job={job}
-            displayJob={lastCompletedJob}
-            processing={busy || Boolean(job && ["queued", "running"].includes(job.status))}
-            elapsedMs={elapsedMs}
-            lastElapsedMs={lastRunElapsedMs}
+      <section className={compactMode ? "min-shell" : "layout-grid"}>
+        <div className="panel control-stack">
+          <UploadForm
+            onFileSelected={handleFileSelected}
+            onClear={sourcePreviewUrl ? resetSourceSelection : undefined}
+            selectedFileName={file?.name ?? null}
+            previewUrl={sourcePreviewUrl}
+            variant={compactMode ? "min" : "max"}
           />
-        </section>
-      ) : (
-        <EngineeringPanel
-          diagnostics={diagnostics}
-          onRefresh={refreshDiagnostics}
-          loading={diagnosticsBusy}
-          runtimeConfig={runtimeConfig}
-          onSaveRuntimeConfig={handleSaveRuntimeConfig}
-          onTriggerWorkerAction={handleTriggerWorkerAction}
-        />
-      )}
 
-      <p className="footer-note">Use via API and local worker runtime. Styled for a clean Gradio-like local workflow.</p>
+          <div className={`action-strip ${compactMode ? "action-strip-min" : ""}`}>
+            <button className="primary-button" type="button" onClick={() => void handleSubmit()} disabled={busy}>
+              {busy ? "Processing..." : "Process"}
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setAngle((value) => Math.max(0, value - 20))}
+              disabled={shadowModel !== "v1-gan"}
+            >
+              -20
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setAngle((value) => Math.min(360, value + 20))}
+              disabled={shadowModel !== "v1-gan"}
+            >
+              +20
+            </button>
+            <div className="inline-slider-card">
+              <input
+                className="slider inline-angle-slider"
+                type="range"
+                min={0}
+                max={360}
+                value={angle}
+                onChange={(event) => setAngle(Number(event.target.value))}
+                disabled={shadowModel !== "v1-gan"}
+                aria-label="Shadow angle"
+              />
+            </div>
+            <div className="angle-chip">{shadowModel === "v1-gan" ? angle : "Auto"}</div>
+          </div>
+
+          {!compactMode ? (
+            <>
+              <div className="stack">
+                <div className="slider-readout">
+                  <span>Selected model</span>
+                  <strong>{shadowModel === "v1-gan" ? "Top" : "Side"}</strong>
+                </div>
+                <p className="helper-copy">{modelDescription}</p>
+              </div>
+
+              <button
+                className={`ghost-button compact-toggle ${advancedMode ? "active" : ""}`}
+                type="button"
+                onClick={() => setAdvancedMode((value) => !value)}
+              >
+                {advancedMode ? "Hide advanced" : "Open advanced"}
+              </button>
+
+              {advancedMode ? (
+                <section className="advanced-panel">
+                  <div className="advanced-heading">
+                    <div>
+                      <div className="section-kicker">Advanced</div>
+                      <h3 className="section-title">Manual controls</h3>
+                    </div>
+                    <span className="advanced-note">Desktop-compatible view with the previous detailed controls.</span>
+                  </div>
+                  <AngleSlider
+                    label="Shadow angle"
+                    min={0}
+                    max={360}
+                    value={angle}
+                    valueLabel={shadowModel === "v1-gan" ? `${angle} deg` : "ignored by Side"}
+                    onChange={setAngle}
+                  />
+                  <AngleSlider
+                    label="Light elevation"
+                    min={0}
+                    max={90}
+                    value={elevation}
+                    valueLabel={shadowModel === "v1-gan" ? `${elevation} deg` : "ignored by Side"}
+                    onChange={setElevation}
+                  />
+                  <p className="helper-copy">
+                    The product request stays richer than some current models. Worker-side adapters decide which shadow controls are actually forwarded to the active backend.
+                  </p>
+                </section>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <ResultView
+          job={job}
+          displayJob={lastCompletedJob}
+          processing={processing}
+          elapsedMs={elapsedMs}
+          lastElapsedMs={lastRunElapsedMs}
+          clientTimings={buildTimingRows(lastClientTiming)}
+          variant={compactMode ? "min" : "max"}
+          onResultImageLoad={() => {
+            const startedAt = currentRunStartedAtRef.current;
+            const readyAt = resultReadyAtRef.current;
+            const loadedAt = Date.now();
+            if (!startedAt) {
+              return;
+            }
+            setLastClientTiming((current) => ({
+              ...(current ?? {}),
+              total_until_image_ms: loadedAt - startedAt,
+              image_after_job_ms: readyAt ? loadedAt - readyAt : current?.image_after_job_ms
+            }));
+          }}
+        />
+      </section>
+    </>
+  );
+
+  return (
+    <main className="shell">
+      {interfaceMode === "engineering" ? (
+        <>
+          <section className="hero hero-inline">
+            <h1>Shadow Generator</h1>
+            <p>Engineering diagnostics and worker control stay unchanged; switch back to `Min` or `Max` below for the user-facing flows.</p>
+          </section>
+          {error ? <div className="error-box">{error}</div> : null}
+          <EngineeringPanel
+            diagnostics={diagnostics}
+            onRefresh={refreshDiagnostics}
+            loading={diagnosticsBusy}
+            runtimeConfig={runtimeConfig}
+            onSaveRuntimeConfig={handleSaveRuntimeConfig}
+            onTriggerWorkerAction={handleTriggerWorkerAction}
+          />
+        </>
+      ) : userControls}
+
+      <section className="panel interface-mode-panel">
+        <div className="ui-switch-row">
+          <span className="muted ui-switch-label">UI:</span>
+          <div className="ui-toggle" role="tablist" aria-label="Interface mode">
+            <button
+              className={`mode-pill ${interfaceMode === "min" ? "active" : ""}`}
+              type="button"
+              onClick={() => setInterfaceMode("min")}
+            >
+              Min
+            </button>
+            <button
+              className={`mode-pill ${interfaceMode === "max" ? "active" : ""}`}
+              type="button"
+              onClick={() => setInterfaceMode("max")}
+            >
+              Max
+            </button>
+            <button
+              className={`mode-pill ${interfaceMode === "engineering" ? "active" : ""}`}
+              type="button"
+              onClick={() => setInterfaceMode("engineering")}
+            >
+              Engineering
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

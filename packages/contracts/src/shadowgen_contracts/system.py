@@ -33,6 +33,38 @@ class WorkerVersionInfo(BaseModel):
     container_name: str | None = None
 
 
+class WorkerCapabilityComponent(BaseModel):
+    name: str
+    available: bool = True
+    backend_kind: str | None = None
+    model_variant: str | None = None
+    supports_batching: bool = False
+    supports_async: bool = False
+    fallback_reason: str | None = None
+
+
+class WorkerCapabilitySnapshot(BaseModel):
+    async_enabled: bool | None = None
+    execution_default_backend: str | None = None
+    refreshed_at: datetime | None = None
+    degraded: bool = False
+    notes: list[str] = Field(default_factory=list)
+    components: list[WorkerCapabilityComponent] = Field(default_factory=list)
+
+
+class WorkerInFlightJob(BaseModel):
+    business_job_id: str
+    mode: str
+    status: str = "submitting"
+    ml_core_job_id: str | None = None
+    request_id: str | None = None
+    submit_started_at: datetime | None = None
+    last_poll_at: datetime | None = None
+    ttl_deadline_at: datetime | None = None
+    retry_count: int = 0
+    last_error: str | None = None
+
+
 class WorkerJobSummary(BaseModel):
     job_id: str
     status: str
@@ -76,6 +108,14 @@ class WorkerRuntimeState(BaseModel):
     last_completed_job_id: str | None = None
     last_completed_duration_ms: int | None = None
     effective_legacy_base_url: str | None = None
+    ml_core_mode: str | None = None
+    async_enabled: bool | None = None
+    capability_refresh_error: str | None = None
+    capabilities: WorkerCapabilitySnapshot | None = None
+    in_flight_jobs: list[WorkerInFlightJob] = Field(default_factory=list)
+    last_submit_error: str | None = None
+    last_poll_error: str | None = None
+    transition_fallback_active: bool = False
     version: WorkerVersionInfo = WorkerVersionInfo()
     last_action: WorkerActionRecord | None = None
 
@@ -86,7 +126,10 @@ __all__ = [
     "UpdateLocalRuntimeConfigResponse",
     "WorkerActionRecord",
     "WorkerActionStatus",
+    "WorkerCapabilityComponent",
+    "WorkerCapabilitySnapshot",
     "WorkerControlAction",
+    "WorkerInFlightJob",
     "WorkerJobSummary",
     "WorkerRuntimeState",
     "WorkerVersionInfo",

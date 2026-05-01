@@ -30,6 +30,7 @@ class JobRecord(BaseModel):
     job_id: str
     status: JobStatus
     request: RenderRequest
+    request_cache_key: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     started_at: datetime | None = None

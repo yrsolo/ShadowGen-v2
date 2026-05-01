@@ -3,6 +3,7 @@ import io
 from shadowgen_adapters.runtime.factories import build_runtime_adapters
 from shadowgen_contracts import AssetKind, JobRecord, JobStatus, LocalRuntimeConfig, RenderRequest, WorkerActionRecord, WorkerRuntimeState
 from datetime import datetime, timezone
+from shadowgen_pipeline.cache_keys import render_request_key
 
 
 class FakeBody:
@@ -20,6 +21,7 @@ class FakeS3Client:
 
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], dict] = {}
+        self.list_calls = 0
 
     def put_object(self, Bucket: str, Key: str, Body: bytes, ContentType: str | None = None):
         payload = Body if isinstance(Body, bytes) else Body.encode("utf-8")
@@ -33,6 +35,7 @@ class FakeS3Client:
         return {"Body": FakeBody(item["Body"]), "ContentType": item.get("ContentType")}
 
     def list_objects_v2(self, Bucket: str, Prefix: str):
+        self.list_calls += 1
         contents = [{"Key": key} for current_bucket, key in self.objects if current_bucket == Bucket and key.startswith(Prefix)]
         return {"Contents": contents}
 
@@ -70,14 +73,21 @@ def test_s3_backed_runtime_supports_shared_state(monkeypatch) -> None:
 
     asset_ref = api_runtime.asset_store.put_bytes(b"source-image", AssetKind.SOURCE, "image/png")
     assert worker_runtime.asset_store.get_bytes(asset_ref.asset_id) == b"source-image"
+    source_hash = worker_runtime.asset_store.get_source_hash(asset_ref.asset_id)
+    assert isinstance(source_hash, str)
+    assert len(source_hash) == 64
 
     job = JobRecord(
         job_id="job-1",
         status=JobStatus.QUEUED,
         request=RenderRequest(source_asset_id=asset_ref.asset_id),
+        request_cache_key=render_request_key(source_hash, RenderRequest(source_asset_id=asset_ref.asset_id)),
     )
     api_runtime.job_repository.create(job)
     assert worker_runtime.job_repository.get("job-1") is not None
+    assert worker_runtime.job_repository.find_by_request_cache_key(job.request_cache_key) is not None
+    assert worker_runtime.job_repository.find_by_request_cache_key("missing-cache-key") is None
+    assert fake_client.list_calls == 0
 
     api_runtime.runtime_config_store.update(LocalRuntimeConfig(legacy_ml_base_url="http://ml:9001"))
     assert worker_runtime.runtime_config_store.get().legacy_ml_base_url == "http://ml:9001"

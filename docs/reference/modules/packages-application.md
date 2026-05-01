@@ -24,3 +24,9 @@ Design rule:
 
 - application depends on contracts, domain, and ports only
 - adapter implementations must stay outside this package
+
+Current execution note:
+
+- `ProcessJobUseCase` still operates on one business job at a time
+- internally it now performs capability probing plus `submit/poll` orchestration against the pipeline port
+- worker state updates are emitted through an observer port so application code does not depend on worker UI or persistence details

@@ -11,6 +11,11 @@ Current user flow:
 5. store final and debug artifacts in shared storage
 6. fetch result previews and diagnostics back through the API
 
+Current behavior highlights:
+
+- duplicate render submissions with the same image bytes and the same render settings are short-circuited before queue publish and reuse the existing live or completed job
+- the worker control UI shows recent successful jobs with completion timestamps and lightweight previews when the final asset is immediately readable from storage
+
 ## Current Runtime Shape
 
 ```text
@@ -25,6 +30,7 @@ Current deployment split:
 - shared state and artifacts use Yandex Object Storage
 - `apps/worker` stays on the local GPU machine
 - the ML service stays behind the local worker
+- the worker supports both sync compatibility mode and async-native ML-core orchestration
 
 ## Active Repositories And Modules
 
@@ -33,10 +39,12 @@ Top-level runtime modules:
 - `apps/api` - FastAPI transport and composition layer
 - `apps/web` - Next.js UI for user flow and engineering diagnostics
 - `apps/worker` - job execution loop and local worker control plane
+- `apps/worker` - job execution loop, ML-core orchestration, and local worker control plane
 - `packages/contracts` - shared DTOs and public/internal contracts
 - `packages/application` - use cases and ports
 - `packages/domain` - entities, statuses, exceptions, value objects
 - `packages/pipeline` - pipeline context, interfaces, and output model
+- `packages/pipeline` - worker-facing ML-core submission, polling, and output model
 - `packages/adapters` - storage, queue, runtime stores, and legacy/new ML adapters
 - `packages/schema` - placeholder area for future standalone schema artifacts
 
@@ -67,6 +75,9 @@ Commands:
 - `scripts\run-local-containers.cmd`
 - `scripts\run-worker-cloud.cmd`
 - `scripts\run-worker-cloud-container.cmd`
+- `scripts\run-worker-cloud-container-detached.cmd`
+
+The default worker container script builds a self-contained image and runs it without mounting the repository or Docker socket. For a separate always-on Docker worker host, use `scripts\run-worker-cloud-container-detached.cmd`; it starts the same self-contained worker with Docker `--restart unless-stopped`. Use `scripts\run-worker-cloud-container-self-managed.cmd` only when you explicitly need the experimental git-update/rebuild controls, because that mode mounts the repository and Docker socket.
 
 Worker control endpoints:
 
@@ -96,6 +107,7 @@ Start here:
 
 - [Documentation Index](docs/README.md)
 - [Quick Start](docs/overview/quick-start.md)
+- [Permanent Worker Host](docs/overview/permanent-worker-host.md)
 - [Runtime Topology](docs/overview/runtime-topology.md)
 - [Repository Map](docs/overview/repository-map.md)
 

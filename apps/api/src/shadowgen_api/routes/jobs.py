@@ -6,7 +6,7 @@ from shadowgen_application.use_cases.create_job import CreateJobUseCase
 from shadowgen_application.use_cases.get_job import GetJobUseCase
 from shadowgen_application.use_cases.get_job_result import GetJobResultUseCase
 from shadowgen_contracts import CreateJobRequest, CreateJobResponse, GetJobResponse, GetJobResultResponse
-from shadowgen_domain import JobNotFoundError
+from shadowgen_domain import AssetNotFoundError, JobNotFoundError
 
 from shadowgen_api.deps import (
     get_asset_store,
@@ -24,10 +24,12 @@ def create_job(
     use_case: CreateJobUseCase = Depends(get_create_job_use_case),
     asset_store: AssetStorePort = Depends(get_asset_store),
 ):
-    if asset_store.get_ref(payload.render.source_asset_id) is None:
+    try:
+        source_hash = asset_store.get_source_hash(payload.render.source_asset_id)
+    except AssetNotFoundError:
         raise HTTPException(status_code=400, detail="Source asset does not exist.")
 
-    job = use_case.execute(CreateJobCommand(request=payload.render))
+    job = use_case.execute(CreateJobCommand(request=payload.render, source_hash=source_hash))
     return CreateJobResponse(job_id=job.job_id, status=job.status)
 
 

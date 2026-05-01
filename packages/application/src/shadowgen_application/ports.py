@@ -8,9 +8,11 @@ from shadowgen_contracts import (
     QueueDiagnostics,
     RenderJobQueuedMessage,
     WorkerActionRecord,
+    WorkerCapabilitySnapshot,
+    WorkerInFlightJob,
     WorkerRuntimeState,
 )
-from shadowgen_pipeline import PipelineContext, PipelineOutput
+from shadowgen_pipeline import PipelineCapabilitiesSummary, PipelineContext, PipelinePollResult, PipelineSubmission
 
 
 class JobRepositoryPort(Protocol):
@@ -21,6 +23,9 @@ class JobRepositoryPort(Protocol):
         ...
 
     def update(self, job: JobRecord) -> None:
+        ...
+
+    def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         ...
 
     def list_recent(self, limit: int = 20) -> list[JobRecord]:
@@ -82,7 +87,36 @@ class AssetStorePort(Protocol):
     def get_ref(self, asset_id: str) -> AssetRef | None:
         ...
 
+    def get_source_hash(self, asset_id: str) -> str:
+        ...
+
 
 class RenderPipelinePort(Protocol):
-    def render(self, context: PipelineContext) -> PipelineOutput:
+    def probe(self, force_refresh: bool = False) -> PipelineCapabilitiesSummary:
+        ...
+
+    def submit(self, context: PipelineContext) -> PipelineSubmission:
+        ...
+
+    def poll(self, submission: PipelineSubmission) -> PipelinePollResult:
+        ...
+
+    def cancel(self, submission: PipelineSubmission) -> None:
+        ...
+
+
+class ProcessJobObserverPort(Protocol):
+    def capabilities_refreshed(self, snapshot: WorkerCapabilitySnapshot) -> None:
+        ...
+
+    def job_submitted(self, state: WorkerInFlightJob) -> None:
+        ...
+
+    def job_polled(self, state: WorkerInFlightJob) -> None:
+        ...
+
+    def job_finished(self, job: JobRecord) -> None:
+        ...
+
+    def job_failed(self, job_id: str, error_text: str) -> None:
         ...

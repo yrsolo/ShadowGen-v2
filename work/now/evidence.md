@@ -28,6 +28,49 @@
 - `.\.venv\Scripts\python.exe -m pytest tests/unit/test_legacy_mapper.py tests/unit/test_legacy_http_adapter.py`
 - `npm run build` in `apps/web`
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_ml_core_adapter.py tests/unit/test_worker_state_service.py tests/unit/test_worker_loop_resilience.py tests/smoke/test_worker_process_job.py -q`
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_api_jobs.py tests/integration/test_system_diagnostics_failures.py tests/integration/test_runtime_config_api.py -q`
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_process_job_failures.py tests/unit/test_ml_core_adapter.py tests/unit/test_worker_state_service.py tests/unit/test_worker_loop_resilience.py tests/smoke/test_worker_process_job.py tests/integration/test_api_jobs.py tests/integration/test_system_diagnostics_failures.py tests/integration/test_runtime_config_api.py -q`
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_worker_control_app.py -q`
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_architecture_boundaries.py -q`
+- `cmd /c npm run build` in `apps/web`
+- `cmd /c npm run build` in `apps/web` after adding client-side latency timing chips
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_worker_control_app.py -q`
+- `Select-String -Path scripts\run-worker-cloud-container.cmd -Pattern "-v |/workspace|docker.sock|WORKER_SELF_MANAGE_ENABLED=true"`
+- `docker build --build-arg SHADOWGEN_GIT_BRANCH=local-check --build-arg SHADOWGEN_GIT_COMMIT=local-check -f apps\worker\Dockerfile -t shadowgen-worker-local:self-contained-check .`
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_s3_runtime_adapters.py tests\unit\test_create_job.py tests\integration\test_api_jobs.py -q`
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260414-1 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260414-1`
+- `yc serverless container revision deploy --container-name shadowgen-api --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260414-1 ...`
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` after the documentation refresh for the ML-core worker refactor
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_worker_control_app.py tests/unit/test_create_job.py tests/integration/test_api_jobs.py tests/integration/test_local_file_runtime.py -q`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` after documenting request-cache reuse and recent-job previews
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_create_job.py tests/integration/test_api_jobs.py tests/integration/test_local_file_runtime.py tests/unit/test_s3_runtime_adapters.py -q`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` after documenting the metadata-driven cache fast path
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-1 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260413-1 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-1`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260413-1`
+- `yc serverless container revision deploy --container-name shadowgen-api --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-1 ...`
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260413-1 ...`
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-2 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-2`
+- `yc serverless container revision deploy --container-name shadowgen-api --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-2 ...`
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-3 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260413-2 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-3`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260413-2`
+- `yc serverless container revision deploy --container-name shadowgen-api --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260413-3 ...`
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260413-2 ...`
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health`
+- local worker image rebuild and detached container restart with `shadowgen-worker-local`
+- `Invoke-RestMethod http://localhost:8081/api/status | ConvertTo-Json -Depth 6`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260414-1 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260414-1`
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260414-1 ...`
+- `curl.exe -I https://shadowgen.solofarm.ru`
 
 ## What Is Confirmed By Code
 
@@ -59,15 +102,92 @@
 - cloud API can enqueue worker control actions through `POST /v1/system/worker-actions`
 - cloud frontend engineering panel can request worker restart/update/clear-override actions without direct inbound access to the worker host
 - worker container build now includes `git`, Docker SDK support, and self-management runtime settings
+- the worker local control page now shows recent successful jobs with second-precision completion timestamps and inline preview data URLs when the final asset can be fetched directly from the active asset store
+- recent-job previews fail quietly when an old or missing result asset cannot be fetched, so the diagnostics page stays usable without extra recovery logic
+- the currently running local `shadowgen-worker` container has been rebuilt and restarted on the refreshed image, and `/api/status` now returns `recent_completed_jobs[*].finished_at_display` plus `preview_src`
 - a clean target contract for the future non-legacy ML service is documented separately from the legacy adapter contract
 - the v2 render contract now includes `shadow.elevation_deg` for light elevation above the horizon
 - the web UI now submits both shadow direction and light elevation while preserving the existing auto-submit flow
 - the legacy adapter now sends only legacy-supported fields to the old ML service and ignores v2-only shadow parameters
+- worker/core integration now uses a dedicated ML-core adapter boundary with `probe`, `submit`, `poll`, and `cancel`
+- the worker can discover ML-core async support through `/health` and `/v1/capabilities`, and it falls back to legacy sync mode when only the old ShadowGEN transport is available
+- the business render contract now includes `preprocess.padding_px`, which is mapped only at the worker/core boundary and does not reshape the public jobs API
+- the worker loop now supports bounded in-flight business jobs instead of a strict single-flight execution model
+- worker runtime state now carries ML-core mode, async flag, capability snapshot, in-flight jobs, and capability refresh diagnostics
+- engineering diagnostics now expose ML-core mode, async support, in-flight count, and capabilities refresh metadata
+- the cloud engineering panel now renders ML-core mode, fallback state, capability refresh details, and current in-flight jobs
+- overview and reference documentation now explicitly describe the `web/api -> queue/state -> worker -> ML core` runtime shape and the `probe/submit/poll/cancel` worker/core boundary
+- reference docs now mention the `ml_core/` adapter package and the worker/ML-core orchestration config keys
 - the root README and `docs/` tree now reflect the current cloud-shaped runtime instead of earlier bootstrap-only framing
 - the docs tree now has an overview layer plus a module-by-module reference layer for all active top-level apps and packages
+- job creation now derives a request cache key from source image bytes plus a normalized render request payload rather than raw `source_asset_id`
+- request-cache normalization ignores `source_asset_id`, so re-uploading the same binary image with the same render settings can reuse an existing job
+- duplicate `queued`, `running`, and `succeeded` jobs are short-circuited before queue publish, while `failed` and `canceled` jobs still allow a fresh retry
+- request-cache lookup no longer needs to download the full source image on cache hit when the asset metadata already contains `source_hash`
+- file and S3 job repositories now keep a direct request-cache index, so cache-hit lookup no longer scans all stored job records
+- the API create-job path now reuses a source hash computed before the use case call, so it avoids a second storage metadata read for the same source asset
+- the web UI now reuses the uploaded `source_asset_id` for the currently selected file instead of re-uploading the same file on every parameter tweak or repeated submit
+- the web UI now reuses the in-memory completed job immediately when a cache hit returns the same `job_id`, instead of fetching that same job again before showing the result
+- the user-page job polling interval was reduced from 1500 ms to 350 ms, which removes roughly a second of average wait after fast worker completions
+- asset content responses are now marked `Cache-Control: public, max-age=31536000, immutable`, so browsers can reuse immutable result asset responses by asset ID
+- the user result panel now exposes client-side latency timings for upload reuse, create-job latency, first get/poll latency, cache hit/miss, job-visible time, and image-visible time
+- the default worker container script now runs the worker without bind-mounting the host repository into `/workspace`
+- the default worker container script now runs without mounting `/var/run/docker.sock`, so the worker no longer has host-level Docker control in the normal runtime
+- `scripts/run-worker-cloud-container-self-managed.cmd` preserves the previous self-managed update mode as an explicit opt-in path for local operator experiments
+- worker image builds with `SHADOWGEN_GIT_BRANCH` and `SHADOWGEN_GIT_COMMIT` build args so self-contained containers can still report version metadata without a mounted `.git` directory
+- the worker local control UI now reports container mode and disables `Update from git` when self-management is disabled
+- S3/Object Storage request-cache lookup is now index-only on the `POST /v1/jobs` hot path; a cache-index miss no longer scans every `jobs/*.json` object
+- the shared render and ML-core contracts now carry `shadow.model` with `v1-gan` / `v2-diff`, and the ML-core request source payload now uses `image_base64`
+- the web UI now has a phone-first vertical basic flow with model selection plus an `Advanced` mode that preserves the previous manual shadow controls
+- the basic user flow now hides ineffective manual shadow controls for `v2-diff` while still keeping the broader product request and adapter boundary intact
+- the web shell now switches between `Min`, `Max`, and `Engineering`, with `Top` / `Side` model pills at the top and the compact `Min` composition aligned to `design/ref`
+- the source preview area now doubles as the upload/camera entry point in `Min`, and loaded source previews now expose a small clear button for quick replacement
+- the compact result panel in `Min` now keeps the preview stable and shows only the tight bottom metadata row (`time`, `status`, `save`) so the mobile layout stays dense without reflow
 - `api.shadowgen.solofarm.ru` is attached to Yandex API Gateway and responds through the deployed serverless container
 - `shadowgen.solofarm.ru` is attached to the web API Gateway and responds through the deployed serverless container
 - the default web gateway domain responds through the deployed serverless container after switching both Docker images to the runtime `PORT`
+- the active serverless revisions are now `shadowgen-api:20260413-1` and `shadowgen-web:20260413-1`
+- the active API serverless revision is now `shadowgen-api:20260413-2`, which includes the metadata-driven request-cache fast path
+- the active serverless revisions are now `shadowgen-api:20260413-3` and `shadowgen-web:20260413-2`, which include the cache-hit latency reductions and faster user-page polling path
+- the active web serverless revision is now `shadowgen-web:20260414-1` (`bbabuhrm325vf8gskkoe`), which includes the client-side latency timing panel
+- the active API serverless revision is now `shadowgen-api:20260414-1` (`bbakfnnvte9du1984i6g`), which removes S3 full job scans from request-cache misses
+- `powershell -ExecutionPolicy Bypass -File scripts/release-check.ps1` passed before the 2026-04-28 rollout
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260428-1 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-1 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260428-1`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-1`
+- `yc serverless container revision deploy --container-name shadowgen-api --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260428-1 ...`
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-1 ...`
+- `cmd /c scripts\\deploy-yc-shadowgen.cmd` refreshed both API Gateway specs after the new revisions were deployed
+- the active API serverless revision is now `shadowgen-api:20260428-1` (`bba1mm6asj40oh6orbei`)
+- the active web serverless revision is now `shadowgen-web:20260428-1` (`bbaof6jeqik3akoi2gdn`)
+- `https://api.shadowgen.solofarm.ru/health` responded with `{"status":"ok"}`
+- `https://shadowgen.solofarm.ru` responded with HTTP `200` and served the `Shadow Generator` page
+- `powershell -ExecutionPolicy Bypass -File scripts/release-check.ps1` passed before the `20260428-2` rollout
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260428-2 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-2 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260428-2`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-2`
+- `yc serverless container revision deploy` activated `shadowgen-api:20260428-2` as revision `bba9l44jgba57vcsg47e`
+- `yc serverless container revision deploy` activated `shadowgen-web:20260428-2` as revision `bbaa9jppfh6h4fsasq5i`
+- `cmd /c scripts\\deploy-yc-shadowgen.cmd` refreshed both API Gateway specs after the `20260428-2` revisions were deployed
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` responded with `{"status":"ok"}`
+- `curl.exe -I https://shadowgen.solofarm.ru` responded with HTTP `200`
+- `Invoke-WebRequest https://shadowgen.solofarm.ru` returned the deployed Next.js HTML document
+- `powershell -ExecutionPolicy Bypass -File scripts/release-check.ps1` passed before the mini UI width hotfix rollout
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-3 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-3`
+- `yc serverless container revision deploy` activated `shadowgen-web:20260428-3` as revision `bba06p5d2se36ekr6c7a`
+- `curl.exe -I https://shadowgen.solofarm.ru` responded with HTTP `200` after the mini UI width hotfix
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` still responded with `{"status":"ok"}`
+- `powershell -ExecutionPolicy Bypass -File scripts/release-check.ps1` passed before the client-side upload resize rollout
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-4 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260428-4`
+- `yc serverless container revision deploy` activated `shadowgen-web:20260428-4` as revision `bbavmmte04p2ht1qtgva`
+- `curl.exe -I https://shadowgen.solofarm.ru` responded with HTTP `200` after the client-side upload resize rollout
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` still responded with `{"status":"ok"}`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` passed after adding the permanent worker host deployment guide
+- `Select-String -Path scripts\\run-worker-cloud-container-detached.cmd -Pattern "--restart unless-stopped|-d \\^|-v |docker.sock|WORKER_SELF_MANAGE_ENABLED=false|--env-file .env.shadowgen"` confirmed detached restart-policy launch, env-file usage, disabled self-management, and no repository/Docker-socket mounts
 - Yandex Cloud resources now exist for ShadowGen: Object Storage bucket `shadowgen.solofarm.ru`, YMQ queue `shadowgen-v2-render-jobs`, container registry `shadowgen-v2`, API gateways for `api` and `web`
 - architecture boundary tests enforce clean/hexagonal separation rules
 
@@ -80,8 +200,14 @@
 ## What Was Updated
 
 - worker runtime state publishing logic
+- ML-core DTOs and worker/core mapping logic
+- process-job orchestration around capabilities probing, submission, and async polling
+- worker loop bounded in-flight execution
+- worker diagnostics, state model, and engineering UI for ML-core execution state
 - worker heartbeat configurability via `WORKER_STATE_HEARTBEAT_INTERVAL_SEC`
 - worker reference docs for throttled S3-backed heartbeat behavior
+- ML-core contract docs and worker module reference docs for dual sync/async orchestration
+- overview and module reference docs for the post-refactor ML-core runtime shape
 - targeted unit coverage for idle heartbeat throttling and idempotent boot publishing
 - repository structure
 - contracts
@@ -97,9 +223,18 @@
 - worker control plane contracts, stores, API routes, local UI, and self-managed container helper flow
 - legacy secret naming preserved for storage credentials and defaults
 - worker container launch now resolves the ML hostname from `LEGACY_ML_BASE_URL` and injects it into Docker host aliases when needed
+- worker recent-job diagnostics payload and local dashboard layout
+- duplicate-request cache lookup before queue publish in the create-job path
 - Yandex Cloud runtime resources and first public deployment
 - architecture instructions and boundary docs
 - documentation
+- the ML-core contract reference and web-module reference docs now describe the `v1-gan` / `v2-diff` split and the mobile-first basic-vs-advanced UI behavior
+- `cmd /c npm run build` in `apps/web` passed after the `Min/Max/Engineering` composition refactor
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_ml_core_adapter.py -q` passed after the web-shell composition refactor
+- the web client now downsizes oversized uploaded images before API upload so the shorter side is at most 1024 px, preserving smaller images as-is
+- `docs/overview/permanent-worker-host.md` now documents moving the worker to a separate always-on Docker host
+- `.env.shadowgen.example` now explains the required worker-host storage, queue, ML, and control-plane values with examples
+- `scripts/run-worker-cloud-container-detached.cmd` now starts the self-contained worker container in detached mode with Docker restart policy for permanent host operation
 - overview pages and module reference pages for active runtime modules
 - tracking
 - tests
@@ -109,3 +244,4 @@
 - containerized local flow assumes external Yandex queue/storage endpoints rather than a fully local emulation stack
 - live legacy server integration remains environment-dependent and was not exercised in these checks
 - container self-update/recreate is an MVP path for the home-server phase and relies on Docker socket + workspace mount conventions remaining stable
+- the self-managed worker mode still relies on Docker socket and repository mounts, so it should remain opt-in rather than the default Docker Desktop path

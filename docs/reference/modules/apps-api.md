@@ -14,6 +14,7 @@ Responsibilities:
 - validate uploads and requests
 - compose application use cases and adapter wiring
 - expose diagnostics, runtime config, and worker action endpoints
+- short-circuit duplicate job creation when the same source image and render parameters already have a live or completed job
 
 Main files:
 

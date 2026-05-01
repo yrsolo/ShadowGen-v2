@@ -32,6 +32,7 @@ def test_create_and_get_job() -> None:
     content_response = client.get(f"/v1/assets/{asset_id}/content")
     assert content_response.status_code == 200
     assert content_response.content == b"image-bytes"
+    assert content_response.headers["cache-control"] == "public, max-age=31536000, immutable"
 
     create_response = client.post(
         "/v1/jobs",
@@ -69,3 +70,45 @@ def test_create_and_get_job() -> None:
     diagnostics_response = client.get("/v1/system/diagnostics")
     assert diagnostics_response.status_code == 200
     assert diagnostics_response.json()["queue"]["backend"] == "memory"
+
+
+def test_create_job_reuses_cached_job_for_same_image_and_params() -> None:
+    reset_local_state()
+    get_config.cache_clear()
+    get_runtime.cache_clear()
+    upload_response = client.post(
+        "/v1/assets",
+        files={"file": ("source.png", b"same-image", "image/png")},
+    )
+    assert upload_response.status_code == 200
+    asset_id = upload_response.json()["asset"]["asset_id"]
+
+    payload = {
+        "render": {
+            "source_asset_id": asset_id,
+            "pipeline_version": "legacy-black-box-v1",
+            "shadow": {
+                "angle_deg": 45,
+                "softness": 0.5,
+                "opacity": 0.6,
+                "reflection": 0.0
+            },
+            "background": {
+                "mode": "solid",
+                "color_hex": "#FFFFFF"
+            },
+            "output": {
+                "format": "png",
+                "width": None,
+                "height": None,
+                "return_debug": False
+            }
+        }
+    }
+
+    first = client.post("/v1/jobs", json=payload)
+    assert first.status_code == 200
+    second = client.post("/v1/jobs", json=payload)
+    assert second.status_code == 200
+
+    assert second.json()["job_id"] == first.json()["job_id"]

@@ -25,6 +25,11 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     state_service.boot()
 
     asset_ref = runtime.asset_store.put_bytes(b"img", AssetKind.SOURCE, "image/png")
+    result_ref = runtime.asset_store.put_bytes(
+        b"\x89PNG\r\n\x1a\n",
+        AssetKind.FINAL,
+        "image/png",
+    )
     runtime.job_repository.create(
         JobRecord(
             job_id="job-ok",
@@ -32,6 +37,12 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
             request=RenderRequest(source_asset_id=asset_ref.asset_id),
             started_at=datetime.now(timezone.utc),
             finished_at=datetime.now(timezone.utc),
+            result={
+                "images": [result_ref.model_dump(mode="json")],
+                "debug_images": [],
+                "metrics": {"total_ms": 10},
+                "warnings": [],
+            },
         )
     )
 
@@ -46,6 +57,10 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     status = client.get("/api/status")
     assert status.status_code == 200
     assert status.json()["worker"]["status"] == "idle"
+    assert status.json()["self_management"]["enabled"] is False
+    assert status.json()["self_management"]["mode"] == "self-contained"
+    assert len(status.json()["recent_completed_jobs"][0]["finished_at_display"]) >= 19
+    assert status.json()["recent_completed_jobs"][0]["preview_src"].startswith("data:image/png;base64,")
 
     denied = client.post("/api/actions/restart", json={"action": "restart_worker_process"})
     assert denied.status_code == 401

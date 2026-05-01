@@ -5,9 +5,22 @@ from shadowgen_application.use_cases.process_job import ProcessJobUseCase
 from shadowgen_contracts import AssetKind, JobRecord, JobStatus, RenderRequest
 
 
+from shadowgen_pipeline import PipelineCapabilitiesSummary
+
+
 class ExplodingPipeline:
-    def render(self, context):
+    def probe(self, force_refresh: bool = False):
+        _ = force_refresh
+        return PipelineCapabilitiesSummary(mode="sync", async_enabled=False)
+
+    def submit(self, context):
         raise RuntimeError("boom")
+
+    def poll(self, submission):
+        raise AssertionError("poll should not be called")
+
+    def cancel(self, submission):
+        _ = submission
 
 
 def test_process_job_marks_failure_on_pipeline_error() -> None:

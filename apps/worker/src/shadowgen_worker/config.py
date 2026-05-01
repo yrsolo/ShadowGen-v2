@@ -6,6 +6,12 @@ class WorkerConfig(BaseSettings):
     poll_interval_sec: float = 1.0
     control_poll_interval_sec: float = 1.0
     worker_state_heartbeat_interval_sec: float = 30.0
+    max_in_flight_jobs: int = 4
+    submit_timeout_ms: int = 120000
+    poll_interval_ms: int = 1000
+    job_ttl_ms: int = 300000
+    capabilities_refresh_interval_sec: float = 45.0
+    max_retries: int = 3
     state_backend: str = "file"
     state_dir: str = ".shadowgen-local"
     s3_endpoint_url: str | None = Field(default=None, validation_alias=AliasChoices("S3_ENDPOINT_URL"))

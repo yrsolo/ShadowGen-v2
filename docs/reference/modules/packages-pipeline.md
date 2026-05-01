@@ -11,11 +11,14 @@ Purpose:
 Key files:
 
 - `context.py` - `PipelineContext`, `PipelineArtifact`, `PipelineOutput`
+- `execution.py` - capabilities, submission, and poll result dataclasses
 - `interfaces.py` - `RenderPipeline` protocol
 - `cache_keys.py` - request-derived cache helpers
 
 Current model:
 
 - worker builds `PipelineContext`
-- adapter returns `PipelineOutput`
+- adapter exposes `probe`, `submit`, `poll`, and `cancel`
+- sync path may return an inline result immediately
+- async path returns a submission token and is completed through polling
 - the rest of the system does not depend on ML transport details
