@@ -5,6 +5,8 @@ export type JobStatus =
   | "failed"
   | "canceled";
 
+export type ShadowModel = "v1-gan" | "v2-diff";
+
 export interface AssetRef {
   asset_id: string;
   kind: "source" | "final" | "debug";
@@ -21,6 +23,7 @@ export interface CreateJobRequest {
     source_asset_id: string;
     pipeline_version: string;
     shadow: {
+      model: ShadowModel;
       angle_deg: number;
       elevation_deg: number;
       softness: number;
@@ -97,6 +100,8 @@ export interface SystemDiagnosticsResponse {
     legacy_base_url?: string | null;
     effective_legacy_base_url?: string | null;
     live_legacy_available?: boolean | null;
+    ml_core_mode?: string | null;
+    async_enabled?: boolean | null;
     heartbeat_age_sec?: number | null;
     heartbeat_is_stale?: boolean | null;
     runtime_state?: {
@@ -110,6 +115,22 @@ export interface SystemDiagnosticsResponse {
       last_completed_job_id?: string | null;
       last_completed_duration_ms?: number | null;
       effective_legacy_base_url?: string | null;
+      ml_core_mode?: string | null;
+      async_enabled?: boolean | null;
+      capability_refresh_error?: string | null;
+      transition_fallback_active?: boolean;
+      in_flight_jobs?: Array<{
+        business_job_id: string;
+        mode: string;
+        status: string;
+        ml_core_job_id?: string | null;
+        request_id?: string | null;
+        submit_started_at?: string | null;
+        last_poll_at?: string | null;
+        ttl_deadline_at?: string | null;
+        retry_count: number;
+        last_error?: string | null;
+      }>;
       version?: {
         git_branch?: string | null;
         git_commit?: string | null;
@@ -118,6 +139,9 @@ export interface SystemDiagnosticsResponse {
       } | null;
       last_action?: WorkerActionRecord | null;
     } | null;
+    capabilities_refreshed_at?: string | null;
+    capability_refresh_error?: string | null;
+    in_flight_count: number;
     recent_completed_jobs: WorkerJobSummary[];
     failed_jobs_count: number;
     recent_failures: JobRecord[];

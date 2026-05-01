@@ -12,8 +12,18 @@ class LegacyPipelineAdapter:
     def __init__(self, base_url: str | None = None, timeout_sec: float = 120.0) -> None:
         self._delegate = LegacyHttpAdapter(base_url, timeout_sec) if base_url else LegacyStubAdapter()
 
-    def render(self, context):
-        return self._delegate.render(context)
+    def probe(self, force_refresh: bool = False):
+        return self._delegate.probe(force_refresh=force_refresh)
+
+    def submit(self, context):
+        return self._delegate.submit(context)
+
+    def poll(self, submission):
+        return self._delegate.poll(submission)
+
+    def cancel(self, submission) -> None:
+        if hasattr(self._delegate, "cancel"):
+            self._delegate.cancel(submission)
 
     def ping(self) -> bool | None:
         if hasattr(self._delegate, "ping"):

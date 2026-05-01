@@ -18,8 +18,10 @@ Submodules:
   - file, memory, and YMQ job queues
 - `runtime/`
   - runtime config, worker state, worker action stores, and adapter factory wiring
+- `ml_core/`
+  - new ML-core sync/async adapter, DTO mapping, transport errors, and stub behavior
 - `legacy_pipeline/`
-  - old ML bridge, mapper, HTTP adapter, stub adapter
+  - old ShadowGEN sync compatibility bridge, mapper, HTTP adapter, and stub adapter
 
 Key file:
 
@@ -28,4 +30,11 @@ Key file:
 Design rule:
 
 - adapter code may know transport and infrastructure details
+- `ml_core/` may know the new worker-to-core HTTP contract
 - only `legacy_pipeline/` may know the old ML service contract
+
+Runtime note:
+
+- the S3 and file job repositories now keep a request-cache index for fast duplicate-request reuse
+- the asset stores persist a source hash in metadata so request-cache lookup can avoid downloading the full source image on a cache hit
+- S3 job repository cache lookup does not fall back to listing every job on a miss; this keeps `POST /v1/jobs` stable as job history grows

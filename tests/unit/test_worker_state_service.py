@@ -1,6 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
-from shadowgen_contracts import LocalRuntimeConfig, WorkerRuntimeState, WorkerVersionInfo
+from shadowgen_contracts import (
+    LocalRuntimeConfig,
+    WorkerCapabilitySnapshot,
+    WorkerInFlightJob,
+    WorkerRuntimeState,
+    WorkerVersionInfo,
+)
 from shadowgen_worker.state import WorkerStateService
 
 
@@ -90,3 +96,58 @@ def test_worker_state_service_boot_is_idempotent_once_initialized(monkeypatch) -
 
     assert store.get_calls == 1
     assert store.update_calls == 1
+
+
+def test_worker_state_service_tracks_capabilities_and_in_flight_jobs(monkeypatch) -> None:
+    store = CountingWorkerStateStore()
+    runtime_config_store = CountingRuntimeConfigStore()
+    clock = {"now": datetime(2026, 4, 12, 10, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr("shadowgen_worker.state.utc_now", lambda: clock["now"])
+    service = WorkerStateService(
+        worker_state_store=store,
+        runtime_config_store=runtime_config_store,
+        config_legacy_base_url="http://ml-core:9001",
+        version_info=WorkerVersionInfo(git_commit="abc123"),
+        idle_heartbeat_interval_sec=60.0,
+    )
+
+    service.boot()
+    service.capabilities_refreshed(
+        WorkerCapabilitySnapshot(
+            async_enabled=True,
+            execution_default_backend="triton",
+            refreshed_at=clock["now"],
+        )
+    )
+    service.job_submitted(
+        WorkerInFlightJob(
+            business_job_id="job-async-1",
+            mode="async",
+            status="queued",
+            ml_core_job_id="ml-1",
+            submit_started_at=clock["now"],
+        )
+    )
+
+    state = store.get()
+    assert state.ml_core_mode == "async"
+    assert state.async_enabled is True
+    assert state.status == "processing"
+    assert len(state.in_flight_jobs) == 1
+    assert state.in_flight_jobs[0].ml_core_job_id == "ml-1"
+
+    clock["now"] += timedelta(seconds=2)
+    service.job_polled(
+        WorkerInFlightJob(
+            business_job_id="job-async-1",
+            mode="async",
+            status="running",
+            ml_core_job_id="ml-1",
+            submit_started_at=state.in_flight_jobs[0].submit_started_at,
+            last_poll_at=clock["now"],
+        )
+    )
+
+    state = store.get()
+    assert state.last_poll_error is None
+    assert state.in_flight_jobs[0].status == "running"

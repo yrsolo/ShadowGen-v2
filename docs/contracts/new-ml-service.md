@@ -4,6 +4,13 @@
 
 This document defines the target contract for the new ShadowGen ML service.
 
+Current frontend-facing model-selection behavior is aligned with the ML-core contract in
+`ShadowGen-ML-service/docs/frontend-shadow-model-contract.md`:
+
+- `shadow.model = "v1-gan"` enables manual top-view shadow control
+- `shadow.model = "v2-diff"` enables the newer automatic any-angle mode
+- the product UI may keep sending the full shadow object, but the ML core is allowed to ignore ineffective manual fields for `v2-diff`
+
 It is intentionally **not** based on the old `ShadowGEN` transport contract.
 Legacy compatibility remains an adapter concern in the current worker runtime.
 
@@ -36,13 +43,14 @@ The new ML service is **not** responsible for:
 ## Design Principles
 
 - stateless
-- synchronous per request
+- supports both synchronous and asynchronous execution modes
 - versioned API
 - explicit request and response schema
 - machine-readable errors
 - no hidden fallback behavior
 - no dependency on project-internal asset IDs
 - no dependency on Yandex infrastructure details
+- worker-owned business concurrency, ML-core-owned stage batching
 
 ## Base URL And Versioning
 
@@ -51,6 +59,9 @@ The service should expose a versioned API surface:
 - `GET /health`
 - `GET /v1/capabilities`
 - `POST /v1/render`
+- `POST /v1/render/jobs`
+- `GET /v1/render/jobs/{job_id}`
+- `DELETE /v1/render/jobs/{job_id}` (optional but recommended)
 
 Future breaking changes should use a new major version path such as `/v2/...`.
 
@@ -67,7 +78,8 @@ Example response:
 
 ```json
 {
-  "status": "ok"
+  "status": "ok",
+  "async_enabled": true
 }
 ```
 
@@ -84,12 +96,28 @@ Example response:
 
 ```json
 {
-  "service_version": "1.0.0",
-  "model_version": "shadow-model-2026-04-07",
-  "supported_input_mime_types": ["image/jpeg", "image/png", "image/webp"],
-  "supported_output_formats": ["png", "webp"],
-  "supports_debug_artifacts": true,
-  "max_image_bytes": 10485760
+  "execution_default_backend": "triton",
+  "async_enabled": true,
+  "components": [
+    {
+      "name": "segmenter",
+      "available": true,
+      "backend_kind": "triton",
+      "model_variant": "sam2",
+      "supports_batching": true,
+      "supports_async": true,
+      "fallback_reason": null,
+      "backends": [
+        {
+          "kind": "triton",
+          "available": true,
+          "supports_batching": true,
+          "supports_async": true,
+          "model_variant": "sam2"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -105,6 +133,26 @@ Transport:
 - `Content-Type: application/json`
 - binary image bytes are passed as base64 in the request body
 
+### `POST /v1/render/jobs`
+
+Purpose:
+
+- submit one render request for asynchronous processing
+- return an ML-core job identifier immediately
+
+### `GET /v1/render/jobs/{job_id}`
+
+Purpose:
+
+- poll asynchronous render job status
+- return either current status or final result
+
+### `DELETE /v1/render/jobs/{job_id}`
+
+Purpose:
+
+- cancel an asynchronous render job when the worker decides the business job is no longer valid
+
 ## Request Contract
 
 ### Top-Level Request
@@ -117,7 +165,11 @@ Transport:
     "mime_type": "image/jpeg",
     "image_base64": "..."
   },
+  "preprocess": {
+    "padding_px": 100
+  },
   "shadow": {
+    "model": "v1-gan",
     "angle_deg": 45,
     "elevation_deg": 35,
     "softness": 0.5,
@@ -173,12 +225,30 @@ Rules:
 - the ML service must decode the image from base64
 - the service must validate the MIME type and image payload consistency
 
+#### `preprocess`
+
+Required object:
+
+```json
+{
+  "padding_px": 100
+}
+```
+
+Definitions:
+
+- `padding_px`
+  - required integer
+  - range: `0+`
+  - canonical crop padding applied before downstream shadow stages
+
 #### `shadow`
 
 Required object:
 
 ```json
 {
+  "model": "v1-gan",
   "angle_deg": 45,
   "elevation_deg": 35,
   "softness": 0.5,
@@ -188,6 +258,16 @@ Required object:
 ```
 
 Definitions:
+
+- `model`
+  - required string
+  - initial allowed values:
+    - `v1-gan`
+    - `v2-diff`
+  - selects the shadow-generation family
+  - `v1-gan` is the manual top-view model
+  - `v2-diff` is the newer automatic model for arbitrary object viewpoints
+  - the service may ignore unsupported manual controls when `model=v2-diff`
 
 - `angle_deg`
   - required number
@@ -317,6 +397,45 @@ Output sizing rules:
   "model_info": {
     "service_version": "1.0.0",
     "model_version": "shadow-model-2026-04-07"
+  }
+}
+```
+
+### Async Submit Response
+
+```json
+{
+  "job_id": "ml-job-123",
+  "request_id": "optional-trace-id",
+  "status": "queued",
+  "created_at": "2026-04-12T12:00:00Z",
+  "updated_at": "2026-04-12T12:00:00Z"
+}
+```
+
+### Async Poll Response
+
+```json
+{
+  "job_id": "ml-job-123",
+  "request_id": "optional-trace-id",
+  "status": "succeeded",
+  "created_at": "2026-04-12T12:00:00Z",
+  "updated_at": "2026-04-12T12:00:01Z",
+  "result": {
+    "request_id": "optional-trace-id",
+    "artifacts": [
+      {
+        "name": "final",
+        "kind": "final",
+        "mime_type": "image/png",
+        "image_base64": "..."
+      }
+    ],
+    "metrics": {
+      "total_ms": 842
+    },
+    "warnings": []
   }
 }
 ```
@@ -451,7 +570,7 @@ Recommended HTTP mapping:
 
 The new service should be:
 
-- synchronous
+- stateless in both sync and async modes
 - deterministic enough for repeated use with the same input and settings
 - free from project-internal filesystem assumptions
 - free from cloud-specific coupling
@@ -461,6 +580,24 @@ The service should:
 - process exactly one request independently
 - not require persistent session state
 - not require shared disk between requests
+
+## Concurrency And Batching Boundary
+
+The worker owns business-job concurrency.
+
+The ML core owns:
+
+- stage scheduling
+- stage-level concurrency
+- stage-level batching
+- Triton usage decisions
+
+That means:
+
+- the worker may keep several jobs in flight
+- the worker must not send tensor batches
+- the ML core may batch compatible heavy stages internally
+- Triton remains an execution backend, not a business-job orchestrator
 
 ## Logging And Traceability
 
@@ -506,7 +643,7 @@ The ML service must not require:
 
 These are intentionally out of scope for the first clean version:
 
-- batch inference
+- worker-managed tensor batching
 - asynchronous callback protocol
 - job orchestration inside the ML service
 - direct storage upload from the ML service
@@ -518,11 +655,16 @@ These are intentionally out of scope for the first clean version:
 The new ML service is considered contract-complete for ShadowGen v2 when:
 
 - `POST /v1/render` accepts one image plus explicit render settings
+- `POST /v1/render/jobs` and `GET /v1/render/jobs/{job_id}` support async-native worker mode
 - `angle_deg` and `elevation_deg` are both supported
+- `shadow.model` is supported with at least `v1-gan` and `v2-diff`
+- `preprocess.padding_px` is supported
 - one final artifact is always returned on success
 - optional debug artifacts are returned when requested
 - `metrics.total_ms` is always present
 - errors use a stable machine-readable shape
+- capabilities expose `async_enabled` and backend/component metadata
+- batching remains an internal ML-core/Triton concern rather than a worker concern
 - the worker adapter can integrate without legacy-specific field names
 
 ## Recommended First Implementation Checklist
@@ -540,4 +682,3 @@ The new ML service is considered contract-complete for ShadowGen v2 when:
   - `return_debug=true`
   - invalid MIME type
   - timeout behavior
-

@@ -4,8 +4,15 @@ import base64
 
 import httpx
 
-from shadowgen_contracts import AssetKind, ProcessingMetrics
-from shadowgen_pipeline import PipelineArtifact, PipelineContext, PipelineOutput
+from shadowgen_contracts import AssetKind, ErrorInfo, ProcessingMetrics
+from shadowgen_pipeline import (
+    PipelineArtifact,
+    PipelineCapabilitiesSummary,
+    PipelineContext,
+    PipelineOutput,
+    PipelinePollResult,
+    PipelineSubmission,
+)
 
 from .base import build_stub_output
 from .mapper import map_render_request_to_legacy_payload
@@ -52,6 +59,34 @@ class LegacyHttpAdapter:
             metrics=metrics,
             warnings=data.get("warnings", []),
         )
+
+    def probe(self, force_refresh: bool = False) -> PipelineCapabilitiesSummary:
+        _ = force_refresh
+        return PipelineCapabilitiesSummary(
+            mode="legacy-sync",
+            async_enabled=False,
+            execution_default_backend="legacy-http",
+            notes=["Legacy sync compatibility path is active."],
+        )
+
+    def submit(self, context: PipelineContext) -> PipelineSubmission:
+        return PipelineSubmission(
+            mode="sync",
+            status="succeeded",
+            result=self.render(context),
+        )
+
+    def poll(self, submission: PipelineSubmission) -> PipelinePollResult:
+        if submission.result is not None:
+            return PipelinePollResult(status="succeeded", result=submission.result)
+        return PipelinePollResult(
+            status="failed",
+            error=ErrorInfo(code="processing_failed", message="Legacy sync submission returned no result."),
+            retryable=False,
+        )
+
+    def cancel(self, submission: PipelineSubmission) -> None:
+        _ = submission
 
     def ping(self) -> bool:
         try:

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 from .jobs import JobRecord
@@ -16,9 +18,14 @@ class WorkerDiagnostics(BaseModel):
     legacy_base_url: str | None = None
     live_legacy_available: bool | None = None
     runtime_state: WorkerRuntimeState | None = None
+    ml_core_mode: str | None = None
+    async_enabled: bool | None = None
     heartbeat_age_sec: int | None = None
     heartbeat_is_stale: bool | None = None
     effective_legacy_base_url: str | None = None
+    capabilities_refreshed_at: datetime | None = None
+    capability_refresh_error: str | None = None
+    in_flight_count: int = 0
     recent_completed_jobs: list[WorkerJobSummary] = []
     failed_jobs_count: int = 0
     recent_failures: list[JobRecord] = []

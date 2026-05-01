@@ -34,4 +34,11 @@ def get_asset_content(asset_id: str, asset_store: AssetStorePort = Depends(get_a
     if asset_ref is None:
         return JSONResponse({"error": {"code": "asset_not_found", "message": "Asset not found"}}, status_code=404)
     payload = asset_store.get_bytes(asset_id)
-    return Response(content=payload, media_type=asset_ref.mime_type, headers={"Content-Disposition": "inline"})
+    return Response(
+        content=payload,
+        media_type=asset_ref.mime_type,
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "public, max-age=31536000, immutable",
+        },
+    )

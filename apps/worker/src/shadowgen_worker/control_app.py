@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
 from html import escape
 
@@ -14,6 +15,28 @@ def _duration_ms(job) -> int | None:
     if job.started_at is None or job.finished_at is None:
         return None
     return int((job.finished_at - job.started_at).total_seconds() * 1000)
+
+
+def _format_timestamp_seconds(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    local_value = value.astimezone()
+    timezone_name = local_value.tzname() or "local"
+    return local_value.strftime(f"%Y-%m-%d %H:%M:%S {timezone_name}")
+
+
+def _build_preview_src(runtime, job) -> str | None:
+    if job.result is None or not job.result.images:
+        return None
+    image = job.result.images[0]
+    if image.url:
+        return image.url
+    try:
+        image_bytes = runtime.asset_store.get_bytes(image.asset_id)
+    except Exception:
+        return None
+    encoded = base64.b64encode(image_bytes).decode("ascii")
+    return f"data:{image.mime_type};base64,{encoded}"
 
 
 def create_worker_control_app(*, config, runtime, state_service, version_info) -> FastAPI:
@@ -33,6 +56,8 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
                 "status": job.status.value,
                 "duration_ms": _duration_ms(job),
                 "finished_at": job.finished_at,
+                "finished_at_display": _format_timestamp_seconds(job.finished_at),
+                "preview_src": _build_preview_src(runtime, job),
             }
             for job in recent_jobs
             if job.status == JobStatus.SUCCEEDED
@@ -61,6 +86,10 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             "recent_actions": actions,
             "version": version_info.model_dump(mode="json"),
             "effective_legacy_base_url": state.effective_legacy_base_url or state_service.effective_legacy_base_url(),
+            "self_management": {
+                "enabled": config.worker_self_manage_enabled,
+                "mode": "self-managed" if config.worker_self_manage_enabled else "self-contained",
+            },
             "storage": {
                 "backend": config.state_backend,
                 "bucket": config.s3_bucket,
@@ -110,7 +139,18 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     def dashboard() -> str:
         payload = status_payload()
         recent_jobs_html = "".join(
-            f"<div class='list-row'><span>{escape(item['job_id'])}</span><strong>{item['duration_ms'] or 'n/a'} ms</strong></div>"
+            "<div class='job-card'>"
+            + (
+                f"<img class='job-preview' src='{escape(item['preview_src'])}' alt='Result preview for {escape(item['job_id'])}' />"
+                if item["preview_src"]
+                else "<div class='job-preview job-preview-empty'>no preview</div>"
+            )
+            + "<div class='job-meta'>"
+            + f"<div><strong>{escape(item['job_id'])}</strong></div>"
+            + f"<div class='muted'>Finished: {escape(item['finished_at_display'] or 'n/a')}</div>"
+            + f"<div class='muted'>Duration: {item['duration_ms'] or 'n/a'} ms</div>"
+            + "</div>"
+            + "</div>"
             for item in payload["recent_completed_jobs"]
         ) or "<div class='list-row'><span>No completed jobs yet</span><strong>idle</strong></div>"
         recent_failures_html = "".join(
@@ -121,6 +161,16 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             f"<div class='list-row'><span>{escape(item['action'])}</span><strong>{escape(item['status'])}</strong></div>"
             for item in payload["recent_actions"]
         ) or "<div class='list-row'><span>No actions yet</span><strong>idle</strong></div>"
+        in_flight_jobs_html = "".join(
+            f"<div class='list-row'><span>{escape(item['business_job_id'])}</span><strong>{escape(item['status'])} / {escape(item['mode'])}</strong></div>"
+            for item in payload["worker"].get("in_flight_jobs", [])
+        ) or "<div class='list-row'><span>No in-flight jobs</span><strong>idle</strong></div>"
+        update_button_attrs = "" if payload["self_management"]["enabled"] else "disabled title='Self-management is disabled in the self-contained container mode.'"
+        self_management_note = (
+            "Self-management enabled: repository and Docker socket mounts are expected."
+            if payload["self_management"]["enabled"]
+            else "Self-contained mode: no repository or Docker socket mounts. Git update/rebuild is disabled for stability."
+        )
         return f"""
 <!doctype html>
 <html lang="en">
@@ -155,9 +205,14 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     .muted {{ color: var(--muted); }}
     .list {{ display:grid; gap:10px; }}
     .list-row {{ display:flex; justify-content:space-between; gap:14px; align-items:flex-start; background: rgba(255,255,255,0.03); border:1px solid var(--border); border-radius: 16px; padding: 12px 14px; }}
+    .job-card {{ display:flex; gap:12px; align-items:flex-start; background: rgba(255,255,255,0.03); border:1px solid var(--border); border-radius: 16px; padding: 12px 14px; }}
+    .job-preview {{ width:72px; height:72px; object-fit:cover; border-radius: 12px; border:1px solid var(--border); background:#10131b; flex-shrink:0; }}
+    .job-preview-empty {{ display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; text-transform:uppercase; }}
+    .job-meta {{ display:grid; gap:4px; min-width:0; }}
     .actions {{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }}
     button {{ border:1px solid var(--border); background: #222838; color: var(--text); border-radius: 12px; padding: 10px 14px; cursor:pointer; }}
     button:hover {{ border-color: rgba(125,211,252,0.5); }}
+    button:disabled {{ opacity: .45; cursor: not-allowed; }}
     .token-row {{ display:flex; gap:10px; margin-top: 14px; }}
     input {{ flex:1; background:#11151f; border:1px solid var(--border); border-radius: 12px; padding: 10px 14px; color: var(--text); }}
     .footer {{ margin-top: 18px; color: var(--muted); font-size: 14px; }}
@@ -181,19 +236,29 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             <div><span class="muted">Last completed</span><strong>{escape(payload["worker"].get("last_completed_job_id") or "n/a")}</strong></div>
             <div><span class="muted">Last duration</span><strong>{payload["worker"].get("last_completed_duration_ms") or "n/a"} ms</strong></div>
             <div><span class="muted">Effective ML URL</span><strong>{escape(payload["effective_legacy_base_url"] or "stub")}</strong></div>
+            <div><span class="muted">ML-core mode</span><strong>{escape(payload["worker"].get("ml_core_mode") or "unknown")}</strong></div>
+            <div><span class="muted">Async enabled</span><strong>{escape(str(payload["worker"].get("async_enabled")) if payload["worker"].get("async_enabled") is not None else "unknown")}</strong></div>
+            <div><span class="muted">In-flight count</span><strong>{len(payload["worker"].get("in_flight_jobs", []))}</strong></div>
             <div><span class="muted">Queue backend</span><strong>{escape(payload["queue"]["backend"])}</strong></div>
             <div><span class="muted">Storage</span><strong>{escape(payload["storage"]["backend"])} / {escape(payload["storage"].get("bucket") or "n/a")}</strong></div>
+            <div><span class="muted">Container mode</span><strong>{escape(payload["self_management"]["mode"])}</strong></div>
             <div><span class="muted">Git</span><strong>{escape(payload["version"].get("git_branch") or "n/a")} @ {escape((payload["version"].get("git_commit") or "n/a")[:12])}</strong></div>
           </div>
+          {"<div class='footer'>Capability refresh issue: " + escape(payload["worker"].get("capability_refresh_error")) + "</div>" if payload["worker"].get("capability_refresh_error") else ""}
           <div class="token-row">
             <input id="token" type="password" placeholder="Worker control token" />
           </div>
           <div class="actions">
             <button onclick="sendAction('/api/actions/restart','restart_worker_process')">Restart process</button>
-            <button onclick="sendAction('/api/actions/update','git_update_rebuild_restart')">Update from git</button>
+            <button {update_button_attrs} onclick="sendAction('/api/actions/update','git_update_rebuild_restart')">Update from git</button>
             <button onclick="sendAction('/api/actions/clear-override','clear_runtime_override')">Clear ML override</button>
           </div>
+          <div class="footer">{escape(self_management_note)}</div>
           <div class="footer">JSON API: <code>/api/status</code>, <code>/api/jobs/recent</code>, <code>/api/failures/recent</code>, <code>/api/actions/recent</code></div>
+        </div>
+        <div class="panel">
+          <h2 class="section-title">In-Flight Jobs</h2>
+          <div class="list">{in_flight_jobs_html}</div>
         </div>
         <div class="panel">
           <h2 class="section-title">Recent Jobs</h2>

@@ -12,14 +12,32 @@ if not exist ".env.shadowgen" (
   exit /b 1
 )
 
-docker info >nul 2>&1
+set "DOCKER_EXE=docker"
+where docker >nul 2>&1
+if errorlevel 1 (
+  if exist "C:\Program Files\Docker\Docker\resources\bin\docker.exe" (
+    set "DOCKER_EXE=C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+  )
+)
+
+"%DOCKER_EXE%" info >nul 2>&1
 if errorlevel 1 (
   echo [ShadowGen] Docker is not available. Start Docker Desktop first.
   exit /b 1
 )
 
+set "SHADOWGEN_GIT_BRANCH="
+set "SHADOWGEN_GIT_COMMIT="
+for /f "usebackq delims=" %%B in (`git rev-parse --abbrev-ref HEAD 2^>nul`) do set "SHADOWGEN_GIT_BRANCH=%%~B"
+for /f "usebackq delims=" %%C in (`git rev-parse HEAD 2^>nul`) do set "SHADOWGEN_GIT_COMMIT=%%~C"
+
 echo [ShadowGen] Building worker image...
-docker build -f apps\worker\Dockerfile -t shadowgen-worker-local .
+"%DOCKER_EXE%" build ^
+  --build-arg SHADOWGEN_GIT_BRANCH="%SHADOWGEN_GIT_BRANCH%" ^
+  --build-arg SHADOWGEN_GIT_COMMIT="%SHADOWGEN_GIT_COMMIT%" ^
+  -f apps\worker\Dockerfile ^
+  -t shadowgen-worker-local ^
+  .
 if errorlevel 1 (
   echo [ShadowGen] Failed to build worker image.
   exit /b 1
@@ -44,27 +62,26 @@ if defined LEGACY_ML_BASE_URL (
   )
 )
 
-for /f %%i in ('docker ps -aq --filter "name=^shadowgen-worker$"') do (
+for /f %%i in ('""%DOCKER_EXE%" ps -aq --filter "name=^shadowgen-worker$""') do (
   echo [ShadowGen] Removing previous worker container...
-  docker rm -f %%i >nul 2>&1
+  "%DOCKER_EXE%" rm -f %%i >nul 2>&1
 )
 
 echo [ShadowGen] Running worker container with .env.shadowgen
 echo [ShadowGen] Worker control UI: http://localhost:8081
 echo [ShadowGen] Worker control JSON: http://localhost:8081/api/status
-docker run --rm ^
+echo [ShadowGen] Stable mode: no repository mount, no Docker socket mount.
+echo [ShadowGen] Container self-update actions are disabled in this mode.
+"%DOCKER_EXE%" run --rm ^
   --name shadowgen-worker ^
   --env-file .env.shadowgen ^
   !DOCKER_ADD_HOST_ARG! ^
-  -e WORKER_SELF_MANAGE_ENABLED=true ^
+  -e WORKER_SELF_MANAGE_ENABLED=false ^
   -e WORKER_CONTAINER_NAME=shadowgen-worker ^
   -e WORKER_IMAGE_TAG=shadowgen-worker-local ^
-  -e WORKER_WORKSPACE_MOUNT_DEST=/workspace ^
   -e WORKER_CONTROL_HOST=0.0.0.0 ^
   -e WORKER_CONTROL_PORT=8081 ^
   -e WORKER_CONTROL_HOST_PORT=8081 ^
   -p 8081:8081 ^
-  -v "%CD%:/workspace" ^
-  -v "//var/run/docker.sock:/var/run/docker.sock" ^
   shadowgen-worker-local
 exit /b %errorlevel%

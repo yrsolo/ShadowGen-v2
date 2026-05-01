@@ -14,6 +14,7 @@ Then:
 ## Start Here
 
 - [Quick Start](overview/quick-start.md)
+- [Permanent Worker Host](overview/permanent-worker-host.md)
 - [Runtime Topology](overview/runtime-topology.md)
 - [Repository Map](overview/repository-map.md)
 

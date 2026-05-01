@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from .common import AssetRef, ProcessingMetrics
@@ -5,11 +7,16 @@ from .enums import BackgroundMode, OutputFormat
 
 
 class ShadowSettings(BaseModel):
+    model: Literal["v1-gan", "v2-diff"] = "v1-gan"
     angle_deg: float = Field(default=45.0, ge=0.0, le=360.0)
     elevation_deg: float = Field(default=45.0, ge=0.0, le=90.0)
     softness: float = Field(default=0.5, ge=0.0, le=1.0)
     opacity: float = Field(default=0.6, ge=0.0, le=1.0)
     reflection: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class PreprocessSpec(BaseModel):
+    padding_px: int = Field(default=100, ge=0)
 
 
 class BackgroundSpec(BaseModel):
@@ -27,6 +34,7 @@ class OutputSpec(BaseModel):
 class RenderRequest(BaseModel):
     source_asset_id: str
     pipeline_version: str = "legacy-black-box-v1"
+    preprocess: PreprocessSpec = PreprocessSpec()
     shadow: ShadowSettings = ShadowSettings()
     background: BackgroundSpec = BackgroundSpec()
     output: OutputSpec = OutputSpec()
@@ -42,6 +50,7 @@ class RenderResult(BaseModel):
 __all__ = [
     "BackgroundSpec",
     "OutputSpec",
+    "PreprocessSpec",
     "RenderRequest",
     "RenderResult",
     "ShadowSettings",

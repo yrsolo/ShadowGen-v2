@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from uuid import uuid4
 
 from shadowgen_contracts import AssetKind, AssetRef
+from shadowgen_domain import AssetNotFoundError
 
 
 class FileAssetStore:
@@ -19,7 +21,16 @@ class FileAssetStore:
         asset_id = f"{kind.value}-{uuid4()}"
         ref = AssetRef(asset_id=asset_id, kind=kind, mime_type=mime_type, url=None)
         (self.bytes_dir / asset_id).write_bytes(data)
-        (self.meta_dir / f"{asset_id}.json").write_text(ref.model_dump_json(indent=2), encoding="utf-8")
+        (self.meta_dir / f"{asset_id}.json").write_text(
+            json.dumps(
+                {
+                    "asset": ref.model_dump(mode="json"),
+                    "source_hash": hashlib.sha256(data).hexdigest(),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         return ref
 
     def get_bytes(self, asset_id: str) -> bytes:
@@ -29,4 +40,20 @@ class FileAssetStore:
         path = self.meta_dir / f"{asset_id}.json"
         if not path.exists():
             return None
-        return AssetRef.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if "asset" in payload:
+            return AssetRef.model_validate(payload["asset"])
+        return AssetRef.model_validate(payload)
+
+    def get_source_hash(self, asset_id: str) -> str:
+        path = self.meta_dir / f"{asset_id}.json"
+        if not path.exists():
+            raise AssetNotFoundError(f"Asset '{asset_id}' was not found.")
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        source_hash = payload.get("source_hash")
+        if source_hash:
+            return source_hash
+        bytes_path = self.bytes_dir / asset_id
+        if not bytes_path.exists():
+            raise AssetNotFoundError(f"Asset '{asset_id}' was not found.")
+        return hashlib.sha256(bytes_path.read_bytes()).hexdigest()

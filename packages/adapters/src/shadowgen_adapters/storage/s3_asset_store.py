@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from uuid import uuid4
 
@@ -7,6 +8,7 @@ from botocore.client import BaseClient
 
 from shadowgen_adapters.object_storage import dump_json_bytes, prefixed_key
 from shadowgen_contracts import AssetKind, AssetRef
+from shadowgen_domain import AssetNotFoundError
 
 
 class S3AssetStore:
@@ -34,6 +36,7 @@ class S3AssetStore:
                 {
                     "asset": ref.model_dump(mode="json"),
                     "object_key": object_key,
+                    "source_hash": hashlib.sha256(data).hexdigest(),
                 }
             ),
             ContentType="application/json",
@@ -52,10 +55,23 @@ class S3AssetStore:
             return None
         return AssetRef.model_validate(metadata["asset"])
 
+    def get_source_hash(self, asset_id: str) -> str:
+        try:
+            metadata = self._get_metadata(asset_id)
+        except self.client.exceptions.NoSuchKey as exc:
+            raise AssetNotFoundError(f"Asset '{asset_id}' was not found.") from exc
+        source_hash = metadata.get("source_hash")
+        if source_hash:
+            return source_hash
+        try:
+            response = self.client.get_object(Bucket=self.bucket, Key=metadata["object_key"])
+        except self.client.exceptions.NoSuchKey as exc:
+            raise AssetNotFoundError(f"Asset '{asset_id}' was not found.") from exc
+        return hashlib.sha256(response["Body"].read()).hexdigest()
+
     def _get_metadata(self, asset_id: str) -> dict:
         response = self.client.get_object(
             Bucket=self.bucket,
             Key=prefixed_key(self.prefix, f"assets/meta/{asset_id}.json"),
         )
         return json.loads(response["Body"].read().decode("utf-8"))
-

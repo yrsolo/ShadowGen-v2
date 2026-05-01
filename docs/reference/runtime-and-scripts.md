@@ -22,6 +22,13 @@ Important keys:
 - ML:
   - `LEGACY_ML_BASE_URL`
   - `LEGACY_ML_TIMEOUT_SEC`
+- worker/ML-core orchestration:
+  - `MAX_IN_FLIGHT_JOBS`
+  - `SUBMIT_TIMEOUT_MS`
+  - `POLL_INTERVAL_MS`
+  - `JOB_TTL_MS`
+  - `CAPABILITIES_REFRESH_INTERVAL_SEC`
+  - `MAX_RETRIES`
 - worker control plane:
   - `WORKER_CONTROL_HOST`
   - `WORKER_CONTROL_PORT`
@@ -42,6 +49,8 @@ Important keys:
 - `scripts/run-local-containers.cmd`
 - `scripts/run-worker-cloud.cmd`
 - `scripts/run-worker-cloud-container.cmd`
+- `scripts/run-worker-cloud-container-detached.cmd`
+- `scripts/run-worker-cloud-container-self-managed.cmd`
 
 ### Verification
 
@@ -63,3 +72,13 @@ Depending on config, runtime factories can build:
 The active wiring is built in:
 
 - `packages/adapters/src/shadowgen_adapters/runtime/factories.py`
+
+## Execution Notes
+
+- `apps/web` and `apps/api` are the public cloud-facing services
+- `apps/worker` remains local and owns business-job orchestration
+- the worker discovers ML-core sync/async capabilities at runtime
+- `LEGACY_ML_BASE_URL` remains the effective worker-side ML target variable for now, even when the endpoint is actually the new ML core
+- `scripts/run-worker-cloud-container.cmd` is the stable container mode: it builds the worker image, injects git metadata as build args, and runs without mounting the repository or Docker socket
+- `scripts/run-worker-cloud-container-detached.cmd` is the always-on worker host mode: it builds the same self-contained image, starts `shadowgen-worker` detached, and uses Docker `--restart unless-stopped`
+- `scripts/run-worker-cloud-container-self-managed.cmd` is an opt-in operator mode: it mounts the repository and Docker socket so git-update/rebuild actions can work, but it is intentionally not the default because large bind mounts can destabilize Docker Desktop
