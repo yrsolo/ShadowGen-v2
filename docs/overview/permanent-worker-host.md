@@ -70,6 +70,35 @@ The Yandex static access key must be allowed to read/write the Object Storage bu
 
 Do not commit `.env.shadowgen`.
 
+### ML URL Priority
+
+The worker chooses the ML URL in this order:
+
+1. runtime override stored in Object Storage at `S3_PREFIX/runtime/config.json`
+2. `LEGACY_ML_BASE_URL` from `.env.shadowgen`
+
+This means editing `.env.shadowgen` is not enough if an old runtime override was previously saved from the web engineering panel or worker control flow.
+
+After changing `LEGACY_ML_BASE_URL`, check the worker UI field:
+
+```text
+Effective ML URL
+```
+
+If it still shows the old address:
+
+1. press `Clear ML override` in the worker control UI
+2. press `Restart process`, or restart the container
+
+From PowerShell, the equivalent cloud action is:
+
+```powershell
+Invoke-RestMethod https://api.shadowgen.solofarm.ru/v1/system/worker-actions `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"action":"clear_runtime_override"}'
+```
+
 ## 3. Start The Always-On Docker Worker
 
 Run:

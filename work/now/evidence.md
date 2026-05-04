@@ -188,6 +188,8 @@
 - `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` still responded with `{"status":"ok"}`
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` passed after adding the permanent worker host deployment guide
 - `Select-String -Path scripts\\run-worker-cloud-container-detached.cmd -Pattern "--restart unless-stopped|-d \\^|-v |docker.sock|WORKER_SELF_MANAGE_ENABLED=false|--env-file .env.shadowgen"` confirmed detached restart-policy launch, env-file usage, disabled self-management, and no repository/Docker-socket mounts
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_worker_state_service.py tests\unit\test_worker_control_app.py -q` passed after clearing stale capability diagnostics when the effective ML URL changes
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` passed after documenting ML URL override priority
 - Yandex Cloud resources now exist for ShadowGen: Object Storage bucket `shadowgen.solofarm.ru`, YMQ queue `shadowgen-v2-render-jobs`, container registry `shadowgen-v2`, API gateways for `api` and `web`
 - architecture boundary tests enforce clean/hexagonal separation rules
 
@@ -235,6 +237,8 @@
 - `docs/overview/permanent-worker-host.md` now documents moving the worker to a separate always-on Docker host
 - `.env.shadowgen.example` now explains the required worker-host storage, queue, ML, and control-plane values with examples
 - `scripts/run-worker-cloud-container-detached.cmd` now starts the self-contained worker container in detached mode with Docker restart policy for permanent host operation
+- worker state now clears stale ML capability status and capability refresh errors when the effective ML URL changes
+- worker-host docs now state that runtime ML override from shared config has priority over `LEGACY_ML_BASE_URL` in `.env.shadowgen`
 - overview pages and module reference pages for active runtime modules
 - tracking
 - tests
