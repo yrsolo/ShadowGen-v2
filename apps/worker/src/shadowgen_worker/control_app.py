@@ -68,6 +68,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
                 "status": job.status.value,
                 "error_message": job.error.message if job.error else None,
                 "finished_at": job.finished_at,
+                "finished_at_display": _format_timestamp_seconds(job.finished_at),
             }
             for job in recent_jobs
             if job.status == JobStatus.FAILED
@@ -154,7 +155,13 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             for item in payload["recent_completed_jobs"]
         ) or "<div class='list-row'><span>No completed jobs yet</span><strong>idle</strong></div>"
         recent_failures_html = "".join(
-            f"<div class='list-row'><span>{escape(item['job_id'])}</span><strong>{escape(item['error_message'] or item['status'])}</strong></div>"
+            "<div class='list-row'>"
+            + "<span>"
+            + escape(item["job_id"])
+            + f"<br><span class='muted'>Finished: {escape(item['finished_at_display'] or 'n/a')}</span>"
+            + "</span>"
+            + f"<strong>{escape(item['error_message'] or item['status'])}</strong>"
+            + "</div>"
             for item in payload["recent_failures"]
         ) or "<div class='list-row'><span>No failures</span><strong>ok</strong></div>"
         recent_actions_html = "".join(
@@ -171,6 +178,12 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             if payload["self_management"]["enabled"]
             else "Self-contained mode: no repository or Docker socket mounts. Git update/rebuild is disabled for stability."
         )
+        capability_notes = payload["worker"].get("capabilities", {}).get("notes", []) if payload["worker"].get("capabilities") else []
+        capability_footer = ""
+        if payload["worker"].get("capability_refresh_error"):
+            capability_footer = "<div class='footer danger'>Current capability refresh issue: " + escape(payload["worker"].get("capability_refresh_error")) + "</div>"
+        elif capability_notes:
+            capability_footer = "<div class='footer'>Capability status: " + escape("; ".join(capability_notes)) + "</div>"
         return f"""
 <!doctype html>
 <html lang="en">
@@ -216,6 +229,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     .token-row {{ display:flex; gap:10px; margin-top: 14px; }}
     input {{ flex:1; background:#11151f; border:1px solid var(--border); border-radius: 12px; padding: 10px 14px; color: var(--text); }}
     .footer {{ margin-top: 18px; color: var(--muted); font-size: 14px; }}
+    .danger {{ color: var(--danger); }}
     @media (max-width: 980px) {{ .grid {{ grid-template-columns: 1fr; }} .hero h1 {{ font-size: 38px; }} }}
   </style>
 </head>
@@ -244,7 +258,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             <div><span class="muted">Container mode</span><strong>{escape(payload["self_management"]["mode"])}</strong></div>
             <div><span class="muted">Git</span><strong>{escape(payload["version"].get("git_branch") or "n/a")} @ {escape((payload["version"].get("git_commit") or "n/a")[:12])}</strong></div>
           </div>
-          {"<div class='footer'>Capability refresh issue: " + escape(payload["worker"].get("capability_refresh_error")) + "</div>" if payload["worker"].get("capability_refresh_error") else ""}
+          {capability_footer}
           <div class="token-row">
             <input id="token" type="password" placeholder="Worker control token" />
           </div>

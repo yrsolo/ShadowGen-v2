@@ -105,8 +105,9 @@ export default function HomePage() {
   }
 
   function getEffectiveShadowDraft(nextDraft?: Partial<ShadowDraft>): ShadowDraft {
+    const legacyOnly = diagnostics?.worker.ml_core_mode === "legacy-sync";
     const draft: ShadowDraft = {
-      model: nextDraft?.model ?? shadowModel,
+      model: legacyOnly ? "v1-gan" : nextDraft?.model ?? shadowModel,
       angle_deg: nextDraft?.angle_deg ?? angle,
       elevation_deg: nextDraft?.elevation_deg ?? elevation
     };
@@ -364,6 +365,12 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (diagnostics?.worker.ml_core_mode === "legacy-sync" && shadowModel !== "v1-gan") {
+      setShadowModel("v1-gan");
+    }
+  }, [diagnostics?.worker.ml_core_mode, shadowModel]);
+
+  useEffect(() => {
     const nextShadow = getEffectiveShadowDraft();
     const lastSubmittedShadow = lastSubmittedShadowRef.current;
 
@@ -389,8 +396,11 @@ export default function HomePage() {
 
   const processing = busy || isJobStillProcessing(job);
   const compactMode = interfaceMode === "min";
+  const legacyOnlyMode = diagnostics?.worker.ml_core_mode === "legacy-sync";
   const modelDescription =
-    shadowModel === "v1-gan"
+    legacyOnlyMode
+      ? "Legacy ML service is active; only Top/manual shadow direction is supported."
+      : shadowModel === "v1-gan"
       ? "Top view with manual shadow direction."
       : "Side view with automatic shadow placement.";
 
@@ -409,6 +419,8 @@ export default function HomePage() {
           <button
             className={`mode-pill ${shadowModel === "v2-diff" ? "active" : ""}`}
             type="button"
+            disabled={legacyOnlyMode}
+            title={legacyOnlyMode ? "Side is unavailable on the legacy ML service." : undefined}
             onClick={() => setShadowModel("v2-diff")}
           >
             Side
@@ -474,7 +486,7 @@ export default function HomePage() {
               <div className="stack">
                 <div className="slider-readout">
                   <span>Selected model</span>
-                  <strong>{shadowModel === "v1-gan" ? "Top" : "Side"}</strong>
+                  <strong>{legacyOnlyMode ? "Top (legacy)" : shadowModel === "v1-gan" ? "Top" : "Side"}</strong>
                 </div>
                 <p className="helper-copy">{modelDescription}</p>
               </div>

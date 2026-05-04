@@ -207,8 +207,11 @@ class MLCorePipelineAdapter:
                     async_enabled=False,
                     execution_default_backend="legacy-http",
                     refreshed_at_iso=_utc_now().isoformat(),
-                    degraded=True,
-                    notes=[f"Falling back to legacy sync path: {exc}"],
+                    degraded=False,
+                    notes=[
+                        "Legacy sync compatibility path is active. "
+                        "The old ML service does not expose ML-core /health or /v1/capabilities."
+                    ],
                 )
             raise MLCoreRetryableError(f"ML core capabilities probe failed: {exc}") from exc
 

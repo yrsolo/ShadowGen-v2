@@ -123,6 +123,15 @@ a {
   transform: translateY(-1px);
 }
 
+.mode-pill:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mode-pill:disabled:hover {
+  transform: none;
+}
+
 .layout-grid,
 .min-shell {
   display: grid;

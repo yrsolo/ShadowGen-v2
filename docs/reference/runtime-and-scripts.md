@@ -21,6 +21,7 @@ Important keys:
   - `YMQ_REGION`
 - ML:
   - `LEGACY_ML_BASE_URL`
+  - `LEGACY_ML_HOST_IP_OVERRIDE`
   - `LEGACY_ML_TIMEOUT_SEC`
 - worker/ML-core orchestration:
   - `MAX_IN_FLIGHT_JOBS`
@@ -79,6 +80,7 @@ The active wiring is built in:
 - `apps/worker` remains local and owns business-job orchestration
 - the worker discovers ML-core sync/async capabilities at runtime
 - `LEGACY_ML_BASE_URL` remains the effective worker-side ML target variable for now, even when the endpoint is actually the new ML core
+- `LEGACY_ML_HOST_IP_OVERRIDE` can force Docker `--add-host` mapping when the ML URL uses a hostname that the container cannot resolve
 - `scripts/run-worker-cloud-container.cmd` is the stable container mode: it builds the worker image, injects git metadata as build args, and runs without mounting the repository or Docker socket
 - `scripts/run-worker-cloud-container-detached.cmd` is the always-on worker host mode: it builds the same self-contained image, starts `shadowgen-worker` detached, and uses Docker `--restart unless-stopped`
 - `scripts/run-worker-cloud-container-self-managed.cmd` is an opt-in operator mode: it mounts the repository and Docker socket so git-update/rebuild actions can work, but it is intentionally not the default because large bind mounts can destabilize Docker Desktop

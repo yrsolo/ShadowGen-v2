@@ -190,6 +190,9 @@
 - `Select-String -Path scripts\\run-worker-cloud-container-detached.cmd -Pattern "--restart unless-stopped|-d \\^|-v |docker.sock|WORKER_SELF_MANAGE_ENABLED=false|--env-file .env.shadowgen"` confirmed detached restart-policy launch, env-file usage, disabled self-management, and no repository/Docker-socket mounts
 - `.\.venv\Scripts\python.exe -m pytest tests\unit\test_worker_state_service.py tests\unit\test_worker_control_app.py -q` passed after clearing stale capability diagnostics when the effective ML URL changes
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` passed after documenting ML URL override priority
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_ml_core_adapter.py tests\unit\test_worker_control_app.py tests\unit\test_worker_state_service.py tests\unit\test_legacy_mapper.py tests\unit\test_legacy_http_adapter.py -q` passed after treating reachable old ML service as legacy compatibility mode instead of degraded capability failure
+- `cmd /c npm run build` in `apps/web` passed after disabling `Side` mode when diagnostics report `legacy-sync`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` passed after documenting `LEGACY_ML_HOST_IP_OVERRIDE`
 - Yandex Cloud resources now exist for ShadowGen: Object Storage bucket `shadowgen.solofarm.ru`, YMQ queue `shadowgen-v2-render-jobs`, container registry `shadowgen-v2`, API gateways for `api` and `web`
 - architecture boundary tests enforce clean/hexagonal separation rules
 
@@ -239,6 +242,10 @@
 - `scripts/run-worker-cloud-container-detached.cmd` now starts the self-contained worker container in detached mode with Docker restart policy for permanent host operation
 - worker state now clears stale ML capability status and capability refresh errors when the effective ML URL changes
 - worker-host docs now state that runtime ML override from shared config has priority over `LEGACY_ML_BASE_URL` in `.env.shadowgen`
+- ML-core adapter now treats a reachable old ML service as normal `legacy-sync` compatibility mode rather than a degraded capability issue
+- worker control UI now shows timestamps for recent failures so old failures are distinguishable from current failures
+- worker container scripts now support `LEGACY_ML_HOST_IP_OVERRIDE` for Docker `--add-host` mapping when the ML URL uses a hostname the container cannot resolve
+- web UI now disables `Side` model selection when diagnostics report `legacy-sync`, because the oldest ML service has no model-selection support
 - overview pages and module reference pages for active runtime modules
 - tracking
 - tests
