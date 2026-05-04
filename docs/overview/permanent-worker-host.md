@@ -35,6 +35,21 @@ If the ML service runs on another LAN machine, use its LAN IP, for example:
 http://192.168.1.5:9001
 ```
 
+If you prefer a hostname such as `http://gtx6:9001`, verify that the Docker container can resolve it. If jobs fail with:
+
+```text
+[Errno -5] No address associated with hostname
+```
+
+either use the LAN IP directly in `LEGACY_ML_BASE_URL` or set:
+
+```dotenv
+LEGACY_ML_BASE_URL=http://gtx6:9001
+LEGACY_ML_HOST_IP_OVERRIDE=192.168.1.5
+```
+
+The worker Docker scripts pass that mapping to Docker as `--add-host gtx6:192.168.1.5`.
+
 ## 2. Create `.env.shadowgen`
 
 Copy the template:
@@ -50,6 +65,7 @@ Open `.env.shadowgen` and fill:
 - `AWS_SECRET_ACCESS_KEY`
 - `YMQ_QUEUE_URL`
 - `LEGACY_ML_BASE_URL`
+- `LEGACY_ML_HOST_IP_OVERRIDE`, only if the Docker container cannot resolve the ML hostname
 - `WORKER_CONTROL_TOKEN`
 
 For production, keep:

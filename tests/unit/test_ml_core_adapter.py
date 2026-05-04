@@ -148,4 +148,7 @@ def test_ml_core_probe_falls_back_to_legacy_sync(monkeypatch) -> None:
 
     assert summary.mode == "legacy-sync"
     assert summary.async_enabled is False
-    assert summary.degraded is True
+    assert summary.degraded is False
+    assert summary.notes == [
+        "Legacy sync compatibility path is active. The old ML service does not expose ML-core /health or /v1/capabilities."
+    ]
