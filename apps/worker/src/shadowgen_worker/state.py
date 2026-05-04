@@ -154,6 +154,11 @@ class WorkerStateService:
         effective_base_url = self.effective_legacy_base_url()
         if state.effective_legacy_base_url != effective_base_url:
             state.effective_legacy_base_url = effective_base_url
+            state.capabilities = None
+            state.ml_core_mode = None
+            state.async_enabled = None
+            state.capability_refresh_error = None
+            state.transition_fallback_active = False
             changed = True
         if state.version.model_dump(mode="json") != self.version_info.model_dump(mode="json"):
             state.version = self.version_info.model_copy(deep=True)

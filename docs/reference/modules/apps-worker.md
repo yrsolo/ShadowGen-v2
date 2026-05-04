@@ -43,6 +43,7 @@ Runtime note:
 - worker/core integration now uses a `probe -> submit -> poll -> cancel` boundary instead of a single blocking `render()` call
 - sync mode remains the compatibility fallback, while async mode is the preferred path when the ML core reports `async_enabled=true`
 - worker-side concurrency is job-level only; tensor batching stays inside the ML core and Triton layer
+- a runtime ML override in shared runtime config has priority over `LEGACY_ML_BASE_URL`; clear it before relying on a changed worker env value
 - the local worker control page renders recent successful jobs with second-precision completion timestamps and an inline preview when the final asset can be fetched directly from the active asset store
 - the default worker container is self-contained: code is baked into the image and runtime does not bind-mount the host repository or Docker socket
 - `scripts/run-worker-cloud-container-detached.cmd` is the preferred always-on Docker mode for moving the worker to a separate permanent host

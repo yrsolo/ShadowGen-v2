@@ -151,3 +151,39 @@ def test_worker_state_service_tracks_capabilities_and_in_flight_jobs(monkeypatch
     state = store.get()
     assert state.last_poll_error is None
     assert state.in_flight_jobs[0].status == "running"
+
+
+def test_worker_state_service_clears_stale_capability_status_when_ml_url_changes(monkeypatch) -> None:
+    store = CountingWorkerStateStore()
+    runtime_config_store = CountingRuntimeConfigStore()
+    clock = {"now": datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr("shadowgen_worker.state.utc_now", lambda: clock["now"])
+    service = WorkerStateService(
+        worker_state_store=store,
+        runtime_config_store=runtime_config_store,
+        config_legacy_base_url="http://old-ml:9001",
+        version_info=WorkerVersionInfo(git_commit="abc123"),
+        idle_heartbeat_interval_sec=60.0,
+    )
+
+    service.boot()
+    service.capabilities_refreshed(
+        WorkerCapabilitySnapshot(
+            async_enabled=False,
+            degraded=True,
+            refreshed_at=clock["now"],
+            notes=["Falling back to legacy sync path: Client error '404 NOT FOUND' for url 'http://old-ml:9001/health'"],
+        )
+    )
+
+    runtime_config_store.update(LocalRuntimeConfig(legacy_ml_base_url="http://new-ml:9001"))
+    clock["now"] += timedelta(seconds=1)
+    service.heartbeat_idle()
+
+    state = store.get()
+    assert state.effective_legacy_base_url == "http://new-ml:9001"
+    assert state.capabilities is None
+    assert state.ml_core_mode is None
+    assert state.async_enabled is None
+    assert state.capability_refresh_error is None
+    assert state.transition_fallback_active is False
