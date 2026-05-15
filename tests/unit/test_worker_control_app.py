@@ -60,7 +60,12 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     assert status.json()["self_management"]["enabled"] is False
     assert status.json()["self_management"]["mode"] == "self-contained"
     assert len(status.json()["recent_completed_jobs"][0]["finished_at_display"]) >= 19
-    assert status.json()["recent_completed_jobs"][0]["preview_src"].startswith("data:image/png;base64,")
+    assert status.json()["recent_completed_jobs"][0]["preview_url"] == "/api/jobs/job-ok/preview"
+
+    preview = client.get("/api/jobs/job-ok/preview")
+    assert preview.status_code == 200
+    assert preview.content == b"\x89PNG\r\n\x1a\n"
+    assert preview.headers["content-type"] == "image/png"
 
     denied = client.post("/api/actions/restart", json={"action": "restart_worker_process"})
     assert denied.status_code == 401

@@ -38,7 +38,20 @@ class JobQueuePublisherPort(Protocol):
 
 
 class JobQueueConsumerPort(Protocol):
-    def consume(self) -> RenderJobQueuedMessage | None:
+    def receive(self) -> "QueueDeliveryPort | None":
+        ...
+
+
+class QueueDeliveryPort(Protocol):
+    message: RenderJobQueuedMessage
+
+    def ack(self) -> None:
+        ...
+
+    def nack(self) -> None:
+        ...
+
+    def extend_visibility(self, timeout_sec: int) -> None:
         ...
 
 

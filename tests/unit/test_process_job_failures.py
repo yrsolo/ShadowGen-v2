@@ -45,3 +45,23 @@ def test_process_job_marks_failure_on_pipeline_error() -> None:
     assert stored is not None
     assert stored.status == JobStatus.FAILED
     assert stored.error is not None
+
+
+def test_process_job_redelivery_of_terminal_job_is_noop() -> None:
+    reset_local_state()
+    asset_ref = asset_store.put_bytes(b"image-bytes", AssetKind.SOURCE, "image/png")
+    job = JobRecord(
+        job_id="job-terminal",
+        status=JobStatus.SUCCEEDED,
+        request=RenderRequest(source_asset_id=asset_ref.asset_id),
+    )
+    job_repository.create(job)
+    use_case = ProcessJobUseCase(
+        job_repository=job_repository,
+        asset_store=asset_store,
+        pipeline=ExplodingPipeline(),
+    )
+
+    processed = use_case.execute(job.job_id)
+
+    assert processed.status == JobStatus.SUCCEEDED

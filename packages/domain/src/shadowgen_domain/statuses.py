@@ -1,3 +1,13 @@
-from shadowgen_contracts import JobStatus
+from enum import Enum
 
-__all__ = ["JobStatus"]
+
+class JobStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELED = "canceled"
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {self.SUCCEEDED, self.FAILED, self.CANCELED}

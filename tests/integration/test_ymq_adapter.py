@@ -5,6 +5,8 @@ from shadowgen_contracts import RenderJobQueuedMessage
 class FakeSqsClient:
     def __init__(self) -> None:
         self.sent_messages = []
+        self.deleted = None
+        self.visibility_changes = []
 
     def send_message(self, **kwargs):
         self.sent_messages.append(kwargs)
@@ -21,6 +23,9 @@ class FakeSqsClient:
 
     def delete_message(self, **kwargs):
         self.deleted = kwargs
+
+    def change_message_visibility(self, **kwargs):
+        self.visibility_changes.append(kwargs)
 
     def get_queue_attributes(self, **kwargs):
         return {
@@ -44,11 +49,42 @@ def test_ymq_adapter_contract(monkeypatch) -> None:
     )
 
     queue.publish(RenderJobQueuedMessage(job_id="job-1"))
-    message = queue.consume()
+    delivery = queue.receive()
+    assert delivery is not None
+    message = delivery.message
+    assert fake_client.deleted is None
+    delivery.ack()
     diagnostics = queue.diagnostics()
 
     assert fake_client.sent_messages
     assert message is not None
     assert message.job_id == "job-1"
+    assert fake_client.deleted["ReceiptHandle"] == "handle-1"
     assert diagnostics.backend == "ymq"
     assert diagnostics.queued_count == 3
+
+
+def test_ymq_delivery_nack_returns_message_to_queue(monkeypatch) -> None:
+    fake_client = FakeSqsClient()
+    monkeypatch.setattr("shadowgen_adapters.queue.ymq_job_queue.boto3.client", lambda *args, **kwargs: fake_client)
+
+    queue = YMQJobQueue(
+        queue_url="https://example.queue",
+        endpoint_url="https://message-queue.api.cloud.yandex.net",
+        region_name="ru-central1",
+        access_key_id="key",
+        secret_access_key="secret",
+    )
+
+    delivery = queue.receive()
+    assert delivery is not None
+    delivery.nack()
+
+    assert fake_client.deleted is None
+    assert fake_client.visibility_changes == [
+        {
+            "QueueUrl": "https://example.queue",
+            "ReceiptHandle": "handle-1",
+            "VisibilityTimeout": 0,
+        }
+    ]
