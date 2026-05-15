@@ -1,3 +1,5 @@
+import time
+
 from shadowgen_adapters.queue.memory_job_queue import InMemoryJobQueue
 from shadowgen_adapters.runtime.memory_worker_state_store import MemoryWorkerStateStore
 from shadowgen_contracts import RenderJobQueuedMessage
@@ -30,10 +32,16 @@ def test_worker_loop_does_not_crash_on_job_error() -> None:
     )
     loop = WorkerLoop(queue=queue, executor=ExplodingExecutor(), state_service=state_service, poll_interval_sec=0.01)
 
-    processed = loop.tick()
+    processed = False
+    for _ in range(20):
+        processed = loop.tick() or processed
+        if state_store.get().status == "error":
+            break
+        time.sleep(0.01)
 
     assert processed is True
     state = state_store.get()
     assert state.status == "error"
     assert state.last_job_id == "job-1"
     assert "failed job job-1" in (state.last_error or "")
+    assert queue.consume().job_id == "job-1"

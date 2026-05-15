@@ -1,6 +1,8 @@
 from functools import lru_cache
+from hmac import compare_digest
 
-from shadowgen_adapters.ml_core import MLCorePipelineAdapter
+from fastapi import Header, HTTPException
+
 from shadowgen_adapters.runtime import build_runtime_adapters
 from shadowgen_application.use_cases import (
     GetJobResultUseCase,
@@ -20,6 +22,12 @@ from shadowgen_api.config import ApiConfig
 @lru_cache(maxsize=1)
 def get_config() -> ApiConfig:
     return ApiConfig()
+
+
+def require_admin_token(x_admin_token: str | None = Header(default=None)) -> None:
+    expected = get_config().admin_api_token
+    if not expected or not x_admin_token or not compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid admin token.")
 
 
 @lru_cache(maxsize=1)
@@ -71,16 +79,13 @@ def get_upload_asset_use_case() -> UploadAssetUseCase:
 def get_system_diagnostics_use_case() -> GetSystemDiagnosticsUseCase:
     config = get_config()
     runtime = get_runtime()
-    pipeline = MLCorePipelineAdapter(
-        base_url=config.legacy_ml_base_url,
-        timeout_sec=config.legacy_ml_timeout_sec,
-        capabilities_refresh_interval_sec=45.0,
-    )
-    try:
-        capabilities = pipeline.probe(force_refresh=True)
-    except Exception:
-        capabilities = None
     runtime_state = runtime.worker_state_store.get()
+    runtime_config = runtime.runtime_config_store.get()
+    worker_render_backend = "unknown"
+    if runtime_state.capabilities and runtime_state.capabilities.execution_default_backend:
+        worker_render_backend = runtime_state.capabilities.execution_default_backend
+    elif runtime_state.ml_core_mode:
+        worker_render_backend = runtime_state.ml_core_mode
     return GetSystemDiagnosticsUseCase(
         app_env=config.app_env,
         job_repository=runtime.job_repository,
@@ -89,13 +94,9 @@ def get_system_diagnostics_use_case() -> GetSystemDiagnosticsUseCase:
         worker_state_store=runtime.worker_state_store,
         worker_action_store=runtime.worker_action_store,
         worker_runtime=WorkerRuntimeInfo(
-            render_backend=(
-                runtime_state.capabilities.execution_default_backend
-                if runtime_state.capabilities and runtime_state.capabilities.execution_default_backend
-                else (capabilities.execution_default_backend or capabilities.mode if capabilities is not None else "unknown")
-            ),
-            legacy_base_url=runtime_state.effective_legacy_base_url or runtime.runtime_config_store.get().legacy_ml_base_url or config.legacy_ml_base_url,
-            live_legacy_available=pipeline.ping(),
+            render_backend=worker_render_backend,
+            legacy_base_url=runtime_state.effective_legacy_base_url or runtime_config.legacy_ml_base_url or config.legacy_ml_base_url,
+            live_legacy_available=None,
         ),
         storage_runtime=StorageRuntimeInfo(
             backend=config.state_backend,

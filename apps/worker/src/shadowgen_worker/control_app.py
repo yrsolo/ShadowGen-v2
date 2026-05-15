@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import base64
 from datetime import datetime, timezone
 from html import escape
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from shadowgen_application.use_cases.create_worker_action import CreateWorkerActionUseCase
 from shadowgen_contracts import CreateWorkerActionRequest, JobStatus
@@ -25,18 +24,10 @@ def _format_timestamp_seconds(value: datetime | None) -> str | None:
     return local_value.strftime(f"%Y-%m-%d %H:%M:%S {timezone_name}")
 
 
-def _build_preview_src(runtime, job) -> str | None:
+def _has_preview(job) -> bool:
     if job.result is None or not job.result.images:
-        return None
-    image = job.result.images[0]
-    if image.url:
-        return image.url
-    try:
-        image_bytes = runtime.asset_store.get_bytes(image.asset_id)
-    except Exception:
-        return None
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return f"data:{image.mime_type};base64,{encoded}"
+        return False
+    return True
 
 
 def create_worker_control_app(*, config, runtime, state_service, version_info) -> FastAPI:
@@ -57,7 +48,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
                 "duration_ms": _duration_ms(job),
                 "finished_at": job.finished_at,
                 "finished_at_display": _format_timestamp_seconds(job.finished_at),
-                "preview_src": _build_preview_src(runtime, job),
+                "preview_url": f"/api/jobs/{job.job_id}/preview" if _has_preview(job) else None,
             }
             for job in recent_jobs
             if job.status == JobStatus.SUCCEEDED
@@ -110,6 +101,20 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     def api_jobs_recent() -> list[dict]:
         return status_payload()["recent_completed_jobs"]
 
+    @app.get("/api/jobs/{job_id}/preview")
+    def api_job_preview(job_id: str):
+        job = runtime.job_repository.get(job_id)
+        if job is None or job.result is None or not job.result.images:
+            raise HTTPException(status_code=404, detail="Preview not found.")
+        image = job.result.images[0]
+        if image.url:
+            return RedirectResponse(image.url)
+        try:
+            image_bytes = runtime.asset_store.get_bytes(image.asset_id)
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail="Preview not found.") from exc
+        return Response(content=image_bytes, media_type=image.mime_type)
+
     @app.get("/api/failures/recent")
     def api_failures_recent() -> list[dict]:
         return status_payload()["recent_failures"]
@@ -142,8 +147,8 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
         recent_jobs_html = "".join(
             "<div class='job-card'>"
             + (
-                f"<img class='job-preview' src='{escape(item['preview_src'])}' alt='Result preview for {escape(item['job_id'])}' />"
-                if item["preview_src"]
+                f"<img class='job-preview' src='{escape(item['preview_url'])}' alt='Result preview for {escape(item['job_id'])}' />"
+                if item["preview_url"]
                 else "<div class='job-preview job-preview-empty'>no preview</div>"
             )
             + "<div class='job-meta'>"
@@ -250,6 +255,8 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             <div><span class="muted">Last completed</span><strong>{escape(payload["worker"].get("last_completed_job_id") or "n/a")}</strong></div>
             <div><span class="muted">Last duration</span><strong>{payload["worker"].get("last_completed_duration_ms") or "n/a"} ms</strong></div>
             <div><span class="muted">Effective ML URL</span><strong>{escape(payload["effective_legacy_base_url"] or "stub")}</strong></div>
+            <div><span class="muted">Env ML URL</span><strong>{escape(config.legacy_ml_base_url or "not set")}</strong></div>
+            <div><span class="muted">Runtime ML override</span><strong>{escape(payload["runtime_config"].get("legacy_ml_base_url") or "not set")}</strong></div>
             <div><span class="muted">ML-core mode</span><strong>{escape(payload["worker"].get("ml_core_mode") or "unknown")}</strong></div>
             <div><span class="muted">Async enabled</span><strong>{escape(str(payload["worker"].get("async_enabled")) if payload["worker"].get("async_enabled") is not None else "unknown")}</strong></div>
             <div><span class="muted">In-flight count</span><strong>{len(payload["worker"].get("in_flight_jobs", []))}</strong></div>

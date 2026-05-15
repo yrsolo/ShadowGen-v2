@@ -25,6 +25,7 @@ class ApiConfig(BaseSettings):
     ymq_secret_access_key: str | None = Field(default=None, validation_alias=AliasChoices("YMQ_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"))
     legacy_ml_base_url: str | None = None
     legacy_ml_timeout_sec: float = 120.0
+    admin_api_token: str = "change-me-shadowgen-admin"
 
     model_config = SettingsConfigDict(
         env_file=".env.shadowgen",

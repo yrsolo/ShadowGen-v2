@@ -14,6 +14,7 @@ from shadowgen_contracts import (
 )
 
 from shadowgen_api.deps import (
+    require_admin_token,
     get_runtime_config_use_case,
     get_system_diagnostics_use_case,
     get_update_runtime_config_use_case,
@@ -40,6 +41,7 @@ def get_runtime_config(
 @router.put("/runtime-config", response_model=UpdateLocalRuntimeConfigResponse)
 def update_runtime_config(
     payload: UpdateLocalRuntimeConfigRequest,
+    _admin: None = Depends(require_admin_token),
     use_case: UpdateRuntimeConfigUseCase = Depends(get_update_runtime_config_use_case),
 ) -> UpdateLocalRuntimeConfigResponse:
     config = use_case.execute(LocalRuntimeConfig(legacy_ml_base_url=payload.legacy_ml_base_url))
@@ -49,6 +51,7 @@ def update_runtime_config(
 @router.post("/worker-actions", response_model=CreateWorkerActionResponse)
 def create_worker_action(
     payload: CreateWorkerActionRequest,
+    _admin: None = Depends(require_admin_token),
     use_case: CreateWorkerActionUseCase = Depends(get_create_worker_action_use_case),
 ) -> CreateWorkerActionResponse:
     command = use_case.execute(

@@ -1,5 +1,30 @@
 # Evidence
 
+## 2026-05-13 Architecture Remediation Checks
+
+- `python -m pytest tests/unit/test_architecture_boundaries.py tests/unit/test_worker_control_app.py tests/integration/test_ymq_adapter.py tests/unit/test_process_job_failures.py tests/unit/test_job_entity.py -q`
+- `python -m pytest tests/unit/test_worker_loop_resilience.py tests/integration/test_runtime_config_api.py tests/integration/test_worker_action_api.py tests/integration/test_api_jobs.py tests/integration/test_local_file_runtime.py tests/integration/test_system_diagnostics_failures.py -q`
+- `python -m pytest`
+- `cmd /c npm run build` in `apps/web`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+
+## 2026-05-13 Architecture Remediation Results
+
+- mutating public API system endpoints now require `X-Admin-Token`
+- read-only diagnostics and runtime-config reads remain public
+- the web engineering panel now asks the operator for the admin token and does not bake that token into the public build
+- API diagnostics no longer constructs or probes `MLCorePipelineAdapter`; it uses worker-published runtime/capability state
+- queue adapters now expose delivery envelopes with `ack`, `nack`, and visibility extension hooks
+- YMQ messages are deleted only on delivery `ack`; failed handling can `nack` the delivery for redelivery
+- the worker loop now receives deliveries and acknowledges them only after job handling completes
+- domain job status/lifecycle logic no longer imports public `shadowgen_contracts`
+- process-job orchestration routes start/complete/fail transitions through domain lifecycle methods
+- redelivery of already terminal jobs is treated as an idempotent no-op
+- worker `/api/status` no longer embeds base64 result previews; recent jobs expose a preview URL instead
+- worker preview bytes are served by `GET /api/jobs/{job_id}/preview`
+- architecture boundary tests now guard against domain-to-contract imports and API-side ML adapter imports
+- CI now runs Python tests, web build, and API/worker Docker smoke builds
+
 ## What Was Checked
 
 - `.\.venv\Scripts\python.exe -m pytest tests/unit/test_worker_state_service.py tests/unit/test_worker_loop_resilience.py tests/unit/test_s3_runtime_adapters.py -q`

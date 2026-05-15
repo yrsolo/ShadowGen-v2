@@ -20,7 +20,7 @@ from shadowgen_application.ports import (
     ProcessJobObserverPort,
     RenderPipelinePort,
 )
-from shadowgen_domain import AssetNotFoundError, JobNotFoundError
+from shadowgen_domain import AssetNotFoundError, JobEntity, JobNotFoundError, JobStatus as DomainJobStatus
 
 
 def utc_now() -> datetime:
@@ -50,14 +50,16 @@ class ProcessJobUseCase:
         job = self.job_repository.get(job_id)
         if job is None:
             raise JobNotFoundError(f"Job '{job_id}' was not found.")
+        if DomainJobStatus(job.status.value).is_terminal:
+            return job
 
         source_ref = self.asset_store.get_ref(job.request.source_asset_id)
         if source_ref is None:
             raise AssetNotFoundError(f"Asset '{job.request.source_asset_id}' was not found.")
 
-        job.status = JobStatus.RUNNING
-        job.started_at = utc_now()
-        job.updated_at = utc_now()
+        domain_job = _to_domain_job(job)
+        domain_job.start(utc_now())
+        _apply_domain_job(job, domain_job)
         self.job_repository.update(job)
 
         try:
@@ -120,9 +122,10 @@ class ProcessJobUseCase:
                 )
                 raise RuntimeError(error.message)
         except Exception as exc:
-            job.status = JobStatus.FAILED
-            job.finished_at = utc_now()
-            job.updated_at = utc_now()
+            domain_job = _to_domain_job(job)
+            if not domain_job.is_terminal:
+                domain_job.fail(utc_now())
+                _apply_domain_job(job, domain_job)
             job.error = ErrorInfo(code="processing_failed", message=str(exc))
             self.job_repository.update(job)
             self._emit_job_failed(job.job_id, str(exc))
@@ -148,9 +151,9 @@ class ProcessJobUseCase:
             metrics=pipeline_output.metrics,
             warnings=pipeline_output.warnings,
         )
-        job.status = JobStatus.SUCCEEDED
-        job.finished_at = utc_now()
-        job.updated_at = utc_now()
+        domain_job = _to_domain_job(job)
+        domain_job.complete(utc_now())
+        _apply_domain_job(job, domain_job)
         self.job_repository.update(job)
         return job
 
@@ -206,3 +209,22 @@ def _coerce_optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _to_domain_job(job: JobRecord) -> JobEntity:
+    return JobEntity(
+        job_id=job.job_id,
+        status=DomainJobStatus(job.status.value),
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+    )
+
+
+def _apply_domain_job(job: JobRecord, domain_job: JobEntity) -> None:
+    job.status = JobStatus(domain_job.status.value)
+    job.created_at = domain_job.created_at
+    job.updated_at = domain_job.updated_at
+    job.started_at = domain_job.started_at
+    job.finished_at = domain_job.finished_at

@@ -24,6 +24,7 @@ web -> api -> queue + shared state -> worker -> render pipeline -> ML adapter ->
 - `apps/web` talks only to the API
 - `packages/application` depends on ports and contracts, not infrastructure
 - `packages/domain` contains entities, invariants, statuses, and exceptions only
+- `packages/domain` does not depend on public API contract DTOs
 - `packages/pipeline` defines the processing interface and pipeline payloads
 - `packages/adapters` implements storage, queue, runtime stores, and ML bridges
 - legacy ML details are allowed only under `packages/adapters/**/legacy_*`
@@ -44,12 +45,13 @@ web -> api -> queue + shared state -> worker -> render pipeline -> ML adapter ->
 - validate and accept uploads
 - create jobs
 - expose job state and result metadata
-- expose runtime config and diagnostics
-- enqueue worker control actions
+- expose diagnostics from queue, storage, and worker-published state
+- protect runtime config updates and worker control actions behind admin-token auth
 
 ### Worker
 
 - consume jobs from the queue
+- acknowledge queue deliveries only after handling completes
 - load source assets from shared state
 - call the render pipeline
 - store final and debug artifacts

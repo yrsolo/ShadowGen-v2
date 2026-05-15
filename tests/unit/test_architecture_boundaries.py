@@ -20,13 +20,22 @@ def test_application_does_not_import_adapters() -> None:
 
 
 def test_domain_does_not_import_transport_libraries() -> None:
-    forbidden = ("fastapi", "httpx", "boto3", "shadowgen_adapters")
+    forbidden = ("fastapi", "httpx", "boto3", "shadowgen_adapters", "shadowgen_contracts")
     for path in iter_python_files():
         if "packages" not in path.parts or "domain" not in path.parts:
             continue
         text = path.read_text(encoding="utf-8")
         for marker in forbidden:
             assert marker not in text, f"Domain layer imports {marker} in {path}"
+
+
+def test_api_does_not_import_ml_core_adapter() -> None:
+    for path in iter_python_files():
+        if "apps" not in path.parts or "api" not in path.parts:
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "shadowgen_adapters.ml_core" not in text, f"API imports worker-side ML adapter in {path}"
+        assert "MLCorePipelineAdapter" not in text, f"API constructs worker-side ML adapter in {path}"
 
 
 def test_legacy_http_details_stay_inside_legacy_adapter() -> None:

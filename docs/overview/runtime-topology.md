@@ -34,6 +34,7 @@ The queue carries business jobs only.
 
 - the worker owns business-job concurrency
 - the worker may keep several jobs in flight
+- queue deliveries are acknowledged only after worker handling completes
 - the worker does not build tensor batches
 - batching remains internal to the ML core and Triton path when supported
 
@@ -56,6 +57,7 @@ This keeps:
 
 - product API contracts stable
 - ML-core transport details out of application code
+- ML-core transport details out of the public API process
 - batching decisions inside the ML core instead of the worker
 
 ## Worker Control Plane

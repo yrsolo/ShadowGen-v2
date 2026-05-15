@@ -26,6 +26,14 @@ Get the processing result, if available.
 
 Engineering-safe diagnostics for storage backend, queue/backend state, worker heartbeat, and recent jobs.
 
+### `GET /v1/system/runtime-config`
+
+Read the runtime ML override visible to API and worker.
+
+### `PUT /v1/system/runtime-config`
+
+Update the runtime ML override. Requires `X-Admin-Token`.
+
 ### `POST /v1/system/worker-actions`
 
 Queue a worker control command for the local worker runtime. Supported MVP actions:
@@ -34,6 +42,8 @@ Queue a worker control command for the local worker runtime. Supported MVP actio
 - `restart_container`
 - `git_update_rebuild_restart`
 - `clear_runtime_override`
+
+Requires `X-Admin-Token`.
 
 ## Response Principles
 
@@ -53,6 +63,7 @@ The worker also exposes a local control surface outside the cloud API:
 - `GET /health` on the local worker control port
 - `GET /api/status`
 - `GET /api/jobs/recent`
+- `GET /api/jobs/{job_id}/preview`
 - `GET /api/failures/recent`
 - `GET /api/actions/recent`
 

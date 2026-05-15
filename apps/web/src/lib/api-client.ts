@@ -14,6 +14,16 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const TARGET_UPLOAD_IMAGE_SHORT_SIDE = 1024;
 const JPEG_UPLOAD_QUALITY = 0.9;
 
+function jsonHeaders(adminToken?: string): HeadersInit {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  };
+  if (adminToken) {
+    headers["X-Admin-Token"] = adminToken;
+  }
+  return headers;
+}
+
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -88,9 +98,7 @@ export function getAssetContentUrl(assetId: string): string {
 export async function createJob(payload: CreateJobRequest): Promise<CreateJobResponse> {
   const response = await fetch(`${API_BASE}/v1/jobs`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: jsonHeaders(),
     body: JSON.stringify(payload)
   });
 
@@ -155,12 +163,10 @@ export async function getRuntimeConfig(): Promise<LocalRuntimeConfig> {
   return response.json();
 }
 
-export async function updateRuntimeConfig(payload: LocalRuntimeConfig): Promise<LocalRuntimeConfig> {
+export async function updateRuntimeConfig(payload: LocalRuntimeConfig, adminToken: string): Promise<LocalRuntimeConfig> {
   const response = await fetch(`${API_BASE}/v1/system/runtime-config`, {
     method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: jsonHeaders(adminToken),
     body: JSON.stringify(payload)
   });
   if (!response.ok) {
@@ -170,12 +176,10 @@ export async function updateRuntimeConfig(payload: LocalRuntimeConfig): Promise<
   return data.config;
 }
 
-export async function createWorkerAction(action: WorkerControlAction): Promise<CreateWorkerActionResponse> {
+export async function createWorkerAction(action: WorkerControlAction, adminToken: string): Promise<CreateWorkerActionResponse> {
   const response = await fetch(`${API_BASE}/v1/system/worker-actions`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
+    headers: jsonHeaders(adminToken),
     body: JSON.stringify({ action })
   });
   if (!response.ok) {

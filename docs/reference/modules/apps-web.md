@@ -33,6 +33,7 @@ Current interaction notes:
 - the source preview shows a small clear button after an image is loaded so the operator can quickly replace it
 - `Max` keeps the larger desktop-oriented workspace and the previous manual controls
 - `Engineering` keeps the current diagnostics and remote worker-control view
+- mutating Engineering actions require the operator to enter the API admin token; the token is not baked into the public web build
 
 Not responsible for:
 

@@ -276,10 +276,10 @@ export default function HomePage() {
     }
   }
 
-  async function handleSaveRuntimeConfig(config: LocalRuntimeConfig) {
+  async function handleSaveRuntimeConfig(config: LocalRuntimeConfig, adminToken: string) {
     setError(null);
     try {
-      const nextConfig = await updateRuntimeConfig(config);
+      const nextConfig = await updateRuntimeConfig(config, adminToken);
       setRuntimeConfig(nextConfig);
       await refreshDiagnostics();
     } catch (cause) {
@@ -292,11 +292,12 @@ export default function HomePage() {
       | "restart_worker_process"
       | "restart_container"
       | "git_update_rebuild_restart"
-      | "clear_runtime_override"
+      | "clear_runtime_override",
+    adminToken: string
   ) {
     setError(null);
     try {
-      await createWorkerAction(action);
+      await createWorkerAction(action, adminToken);
       await refreshDiagnostics();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to trigger worker action");

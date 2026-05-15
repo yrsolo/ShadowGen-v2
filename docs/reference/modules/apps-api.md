@@ -15,6 +15,7 @@ Responsibilities:
 - compose application use cases and adapter wiring
 - expose diagnostics, runtime config, and worker action endpoints
 - short-circuit duplicate job creation when the same source image and render parameters already have a live or completed job
+- require `X-Admin-Token` for mutating runtime config and worker action endpoints
 
 Main files:
 
@@ -29,5 +30,6 @@ Main files:
 Not responsible for:
 
 - ML inference
+- ML-core probing; diagnostics read worker-published state instead
 - queue consumption
 - artifact generation

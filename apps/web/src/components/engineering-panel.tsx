@@ -9,8 +9,8 @@ interface EngineeringPanelProps {
   onRefresh: () => void;
   loading: boolean;
   runtimeConfig: LocalRuntimeConfig | null;
-  onSaveRuntimeConfig: (config: LocalRuntimeConfig) => Promise<void>;
-  onTriggerWorkerAction: (action: WorkerControlAction) => Promise<void>;
+  onSaveRuntimeConfig: (config: LocalRuntimeConfig, adminToken: string) => Promise<void>;
+  onTriggerWorkerAction: (action: WorkerControlAction, adminToken: string) => Promise<void>;
 }
 
 export function EngineeringPanel({
@@ -22,6 +22,7 @@ export function EngineeringPanel({
   onTriggerWorkerAction
 }: EngineeringPanelProps) {
   const [legacyUrl, setLegacyUrl] = useState(runtimeConfig?.legacy_ml_base_url ?? "");
+  const [adminToken, setAdminToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState<WorkerControlAction | null>(null);
 
@@ -34,7 +35,7 @@ export function EngineeringPanel({
     try {
       await onSaveRuntimeConfig({
         legacy_ml_base_url: legacyUrl.trim() || null
-      });
+      }, adminToken);
     } finally {
       setSaving(false);
     }
@@ -43,7 +44,7 @@ export function EngineeringPanel({
   async function handleAction(action: WorkerControlAction) {
     setActing(action);
     try {
-      await onTriggerWorkerAction(action);
+      await onTriggerWorkerAction(action, adminToken);
     } finally {
       setActing(null);
     }
@@ -61,6 +62,15 @@ export function EngineeringPanel({
       <div className="engineering-grid">
         <div className="stack engineering-left-column">
           <div className="panel engineering-subpanel stack">
+            <label htmlFor="admin-api-token">Admin token</label>
+            <input
+              className="input compact-input"
+              id="admin-api-token"
+              type="password"
+              value={adminToken}
+              onChange={(event) => setAdminToken(event.target.value)}
+              placeholder="Required for operator actions"
+            />
             <label htmlFor="legacy-ml-url">ML server URL</label>
             <div className="engineering-url-row">
               <input
