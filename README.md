@@ -76,9 +76,8 @@ Commands:
 - `scripts\run-local-containers.cmd`
 - `scripts\run-worker-cloud.cmd`
 - `scripts\run-worker-cloud-container.cmd`
-- `scripts\run-worker-cloud-container-detached.cmd`
 
-The default worker container script builds a self-contained image and runs it without mounting the repository or Docker socket. For a separate always-on Docker worker host, use `scripts\run-worker-cloud-container-detached.cmd`; it starts the same self-contained worker with Docker `--restart unless-stopped`. Use `scripts\run-worker-cloud-container-self-managed.cmd` only when you explicitly need the experimental git-update/rebuild controls, because that mode mounts the repository and Docker socket.
+The worker container script builds a self-contained image and starts `shadowgen-worker` detached with Docker `--restart unless-stopped`. It does not mount the repository or Docker socket, so in-UI git update/rebuild controls stay disabled by design.
 
 Worker control endpoints:
 

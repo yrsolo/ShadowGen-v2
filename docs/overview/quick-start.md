@@ -54,25 +54,18 @@ scripts\run-worker-cloud-container.cmd
 - the repository is baked into the image at build time
 - the host repository is not bind-mounted into the container
 - Docker socket is not mounted into the container
+- the container runs detached with `--restart unless-stopped`
 - `Update from git` / container self-rebuild actions are disabled
-
-If you intentionally need the experimental self-managed update flow, use:
-
-```powershell
-scripts\run-worker-cloud-container-self-managed.cmd
-```
-
-That mode mounts the repository and Docker socket so the worker can run `git pull`, rebuild its image, and recreate itself. It is useful for local operator experiments, but it is less stable on Docker Desktop and should not be the normal runtime.
 
 ### Permanent Docker worker host
 
 For a separate always-on computer that should keep only the worker running in Docker, use:
 
 ```powershell
-scripts\run-worker-cloud-container-detached.cmd
+scripts\run-worker-cloud-container.cmd
 ```
 
-That script starts `shadowgen-worker` in detached mode with `--restart unless-stopped`, so Docker restarts it after host or Docker restarts. Full setup instructions are in [Permanent Worker Host](permanent-worker-host.md).
+The same script starts `shadowgen-worker` in detached mode with `--restart unless-stopped`, so Docker restarts it after host or Docker restarts. Full setup instructions are in [Permanent Worker Host](permanent-worker-host.md).
 
 ## Useful URLs
 

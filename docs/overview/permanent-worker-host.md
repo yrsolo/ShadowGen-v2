@@ -120,7 +120,7 @@ Invoke-RestMethod https://api.shadowgen.solofarm.ru/v1/system/worker-actions `
 Run:
 
 ```powershell
-scripts\run-worker-cloud-container-detached.cmd
+scripts\run-worker-cloud-container.cmd
 ```
 
 The script:
@@ -182,7 +182,7 @@ On the worker host:
 
 ```powershell
 git pull
-scripts\run-worker-cloud-container-detached.cmd
+scripts\run-worker-cloud-container.cmd
 ```
 
 The script removes the previous `shadowgen-worker` container, rebuilds the image, and starts a new detached container with the same restart policy.
@@ -204,16 +204,5 @@ docker start shadowgen-worker
 Rebuild and restart from repo code:
 
 ```powershell
-scripts\run-worker-cloud-container-detached.cmd
+scripts\run-worker-cloud-container.cmd
 ```
-
-## 7. When To Use Self-Managed Mode
-
-The normal permanent host should use `scripts\run-worker-cloud-container-detached.cmd`.
-
-Use `scripts\run-worker-cloud-container-self-managed.cmd` only when you explicitly accept both of these risks:
-
-- the repository is bind-mounted into the container
-- Docker socket is mounted into the container, giving it host-level Docker control
-
-That mode is useful for operator experiments with in-UI git update/rebuild controls. It is not the recommended always-on production mode.
