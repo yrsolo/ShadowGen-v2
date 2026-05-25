@@ -69,14 +69,13 @@ The worker has two control surfaces:
 
 This split keeps the worker private while still allowing remote operations through the public frontend and API.
 
-## Worker Container Modes
+## Worker Container Mode
 
-The normal worker container mode is self-contained:
+The worker container mode is self-contained:
 
 - worker code and package code are copied into the image
 - the host repository is not mounted
 - Docker socket is not mounted
+- the container runs detached with `--restart unless-stopped`
 - process restart remains available
 - git update/rebuild/recreate actions are disabled
-
-There is a separate opt-in self-managed mode for local operator experiments. That mode mounts the repository plus Docker socket and enables the worker to rebuild/recreate itself. It is intentionally not the default because large Windows or network-folder bind mounts can destabilize Docker Desktop and because Docker socket access gives the container host-level control.

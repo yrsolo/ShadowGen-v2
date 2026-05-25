@@ -1,5 +1,19 @@
 # Evidence
 
+## 2026-05-26 Worker Container Script Consolidation
+
+- `scripts/run-worker-cloud-container.cmd` is now the only worker container launcher.
+- The remaining script builds `shadowgen-worker-local`, removes any previous `shadowgen-worker`, and starts a detached self-contained container with Docker `--restart unless-stopped`.
+- The removed script variants were `scripts/run-worker-cloud-container-detached.cmd` and `scripts/run-worker-cloud-container-self-managed.cmd`.
+- The supported container mode does not mount the repository or Docker socket, and worker self-management stays disabled.
+- README, overview docs, reference docs, and `.env.shadowgen.example` now point to the single script.
+
+## 2026-05-26 Worker Container Script Checks
+
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+- `git diff --check`
+- `rg -n "run-worker-cloud-container-detached|run-worker-cloud-container-self-managed|self-managed" README.md docs scripts .env.shadowgen.example` returned no matches.
+
 ## 2026-05-25 Diagnostics Trace And Probe Checks
 
 - `.\.venv\Scripts\python.exe -m pytest tests/unit/test_create_job.py tests/unit/test_process_job_failures.py tests/unit/test_worker_state_service.py tests/unit/test_worker_control_app.py tests/integration/test_worker_action_api.py tests/integration/test_system_diagnostics_failures.py tests/smoke/test_worker_process_job.py -q`

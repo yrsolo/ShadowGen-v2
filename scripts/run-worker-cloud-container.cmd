@@ -5,6 +5,8 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0.."
 
 echo [ShadowGen] Starting worker container against cloud services...
+echo [ShadowGen] This is the single supported Docker worker mode.
+echo [ShadowGen] It starts a self-contained detached container with restart policy.
 
 if not exist ".env.shadowgen" (
   echo [ShadowGen] .env.shadowgen is missing.
@@ -45,9 +47,13 @@ if errorlevel 1 (
 
 set "LEGACY_ML_BASE_URL="
 set "LEGACY_ML_HOST_IP_OVERRIDE="
+set "WORKER_CONTROL_HOST_PORT=8081"
+set "WORKER_CONTROL_PORT=8081"
 for /f "usebackq tokens=1,* delims==" %%A in (".env.shadowgen") do (
   if /I "%%~A"=="LEGACY_ML_BASE_URL" set "LEGACY_ML_BASE_URL=%%~B"
   if /I "%%~A"=="LEGACY_ML_HOST_IP_OVERRIDE" set "LEGACY_ML_HOST_IP_OVERRIDE=%%~B"
+  if /I "%%~A"=="WORKER_CONTROL_HOST_PORT" set "WORKER_CONTROL_HOST_PORT=%%~B"
+  if /I "%%~A"=="WORKER_CONTROL_PORT" set "WORKER_CONTROL_PORT=%%~B"
 )
 
 set "DOCKER_ADD_HOST_ARG="
@@ -73,12 +79,11 @@ for /f %%i in ('""%DOCKER_EXE%" ps -aq --filter "name=^shadowgen-worker$""') do 
   "%DOCKER_EXE%" rm -f %%i >nul 2>&1
 )
 
-echo [ShadowGen] Running worker container with .env.shadowgen
-echo [ShadowGen] Worker control UI: http://localhost:8081
-echo [ShadowGen] Worker control JSON: http://localhost:8081/api/status
+echo [ShadowGen] Running detached worker container with restart policy.
 echo [ShadowGen] Stable mode: no repository mount, no Docker socket mount.
 echo [ShadowGen] Container self-update actions are disabled in this mode.
-"%DOCKER_EXE%" run --rm ^
+"%DOCKER_EXE%" run -d ^
+  --restart unless-stopped ^
   --name shadowgen-worker ^
   --env-file .env.shadowgen ^
   !DOCKER_ADD_HOST_ARG! ^
@@ -86,8 +91,17 @@ echo [ShadowGen] Container self-update actions are disabled in this mode.
   -e WORKER_CONTAINER_NAME=shadowgen-worker ^
   -e WORKER_IMAGE_TAG=shadowgen-worker-local ^
   -e WORKER_CONTROL_HOST=0.0.0.0 ^
-  -e WORKER_CONTROL_PORT=8081 ^
-  -e WORKER_CONTROL_HOST_PORT=8081 ^
-  -p 8081:8081 ^
+  -e WORKER_CONTROL_PORT=!WORKER_CONTROL_PORT! ^
+  -e WORKER_CONTROL_HOST_PORT=!WORKER_CONTROL_HOST_PORT! ^
+  -p !WORKER_CONTROL_HOST_PORT!:!WORKER_CONTROL_PORT! ^
   shadowgen-worker-local
-exit /b %errorlevel%
+if errorlevel 1 (
+  echo [ShadowGen] Failed to start worker container.
+  exit /b 1
+)
+
+echo [ShadowGen] Worker container is running detached.
+echo [ShadowGen] Worker control UI: http://localhost:!WORKER_CONTROL_HOST_PORT!
+echo [ShadowGen] Worker control JSON: http://localhost:!WORKER_CONTROL_HOST_PORT!/api/status
+echo [ShadowGen] Follow logs with: docker logs -f shadowgen-worker
+exit /b 0

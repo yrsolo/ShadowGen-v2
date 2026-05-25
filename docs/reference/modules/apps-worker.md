@@ -48,6 +48,6 @@ Runtime note:
 - a runtime ML override in shared runtime config has priority over `LEGACY_ML_BASE_URL`; clear it before relying on a changed worker env value
 - the local worker control page renders recent jobs with timestamps, preview URLs, copyable job ids, and expandable stage timelines; image bytes are served only by `GET /api/jobs/{job_id}/preview`
 - `diagnostic_probe` checks the worker action round-trip and probes the effective ML URL from the worker side, using the ML-core health path or legacy `/test` compatibility path
-- the default worker container is self-contained: code is baked into the image and runtime does not bind-mount the host repository or Docker socket
-- `scripts/run-worker-cloud-container-detached.cmd` is the preferred always-on Docker mode for moving the worker to a separate permanent host
-- container self-management is opt-in through `scripts/run-worker-cloud-container-self-managed.cmd`; in the default mode the local UI disables git update/rebuild controls
+- the worker container is self-contained: code is baked into the image and runtime does not bind-mount the host repository or Docker socket
+- `scripts/run-worker-cloud-container.cmd` starts the always-on Docker worker detached with `--restart unless-stopped`
+- container self-management is intentionally disabled in the supported container script, so the local UI disables git update/rebuild controls
