@@ -19,6 +19,20 @@
 - web engineering panel now shows worker life status, probe status, recent jobs with datetime, micro preview, cache badge, copyable job id, and expandable timelines
 - local worker control page now exposes recent job timelines, copyable job ids, worker life indicator, and probe button
 
+## 2026-05-25 Cloud Deployment
+
+- Docker Desktop was started because the local Docker daemon was not running.
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260525-1 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260525-1 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260525-1`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260525-1`
+- `yc serverless container revision deploy` activated API revision `bbajmtej58mtobdjlalj` with image `shadowgen-api:20260525-1`.
+- `yc serverless container revision deploy` activated web revision `bbaf2ktsfvumo2g8uluh` with image `shadowgen-web:20260525-1`.
+- `cmd /c scripts\deploy-yc-shadowgen.cmd` refreshed API and web gateway specs.
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` returned `{"status":"ok"}`.
+- `curl.exe -I https://shadowgen.solofarm.ru` returned HTTP `200`.
+- `GET https://api.shadowgen.solofarm.ru/v1/system/diagnostics` returned the new diagnostics fields, including `heartbeat_is_stale`, `last_worker_probe`, and `last_ml_probe`.
+
 ## 2026-05-13 Architecture Remediation Checks
 
 - `python -m pytest tests/unit/test_architecture_boundaries.py tests/unit/test_worker_control_app.py tests/integration/test_ymq_adapter.py tests/unit/test_process_job_failures.py tests/unit/test_job_entity.py -q`
