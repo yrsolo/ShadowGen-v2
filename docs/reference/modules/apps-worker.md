@@ -16,6 +16,7 @@ Responsibilities:
 - keep bounded business jobs in flight toward the ML core
 - update job state and artifacts
 - maintain worker runtime state with event-driven updates and a throttled idle heartbeat
+- publish active worker and ML diagnostic probe results
 - expose a local worker control UI and JSON endpoints
 - execute worker control actions
 
@@ -39,13 +40,14 @@ Not responsible for:
 Runtime note:
 
 - when `STATE_BACKEND=s3`, the worker still polls queue/config as needed, but `runtime/worker-state.json` is rewritten only on meaningful state changes or on the throttled idle heartbeat interval
-- the default idle heartbeat interval is 30 seconds so diagnostics do not flap around the current 60-second stale threshold
+- the default idle heartbeat interval is 30 seconds; diagnostics mark worker state stale only after five minutes without a fresh heartbeat/probe
 - worker/core integration now uses a `probe -> submit -> poll -> cancel` boundary instead of a single blocking `render()` call
 - queue messages are acknowledged only after worker handling completes; failed handling is nacked so the queue can redeliver
 - sync mode remains the compatibility fallback, while async mode is the preferred path when the ML core reports `async_enabled=true`
 - worker-side concurrency is job-level only; tensor batching stays inside the ML core and Triton layer
 - a runtime ML override in shared runtime config has priority over `LEGACY_ML_BASE_URL`; clear it before relying on a changed worker env value
-- the local worker control page renders recent successful jobs with second-precision completion timestamps and preview URLs; image bytes are served only by `GET /api/jobs/{job_id}/preview`
+- the local worker control page renders recent jobs with timestamps, preview URLs, copyable job ids, and expandable stage timelines; image bytes are served only by `GET /api/jobs/{job_id}/preview`
+- `diagnostic_probe` checks the worker action round-trip and probes the effective ML URL from the worker side, using the ML-core health path or legacy `/test` compatibility path
 - the default worker container is self-contained: code is baked into the image and runtime does not bind-mount the host repository or Docker socket
 - `scripts/run-worker-cloud-container-detached.cmd` is the preferred always-on Docker mode for moving the worker to a separate permanent host
 - container self-management is opt-in through `scripts/run-worker-cloud-container-self-managed.cmd`; in the default mode the local UI disables git update/rebuild controls

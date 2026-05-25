@@ -29,6 +29,20 @@ def test_worker_action_can_be_enqueued_via_api() -> None:
     assert diagnostics.json()["worker"]["recent_actions"][0]["action"] == "restart_worker_process"
 
 
+def test_diagnostic_probe_action_can_be_enqueued_via_api() -> None:
+    reset_local_state()
+    get_config.cache_clear()
+    get_runtime.cache_clear()
+
+    response = client.post(
+        "/v1/system/worker-actions",
+        headers=ADMIN_HEADERS,
+        json={"action": "diagnostic_probe"},
+    )
+    assert response.status_code == 200
+    assert response.json()["command"]["action"] == "diagnostic_probe"
+
+
 def test_worker_action_requires_admin_token() -> None:
     reset_local_state()
     get_config.cache_clear()

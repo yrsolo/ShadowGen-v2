@@ -45,6 +45,8 @@ def test_process_job_marks_failure_on_pipeline_error() -> None:
     assert stored is not None
     assert stored.status == JobStatus.FAILED
     assert stored.error is not None
+    assert any(stage.name == "ml_submit" and stage.status == "failed" for stage in stored.trace)
+    assert stored.trace[-1].name == "failed"
 
 
 def test_process_job_redelivery_of_terminal_job_is_noop() -> None:
@@ -65,3 +67,5 @@ def test_process_job_redelivery_of_terminal_job_is_noop() -> None:
     processed = use_case.execute(job.job_id)
 
     assert processed.status == JobStatus.SUCCEEDED
+    assert processed.trace[-1].name == "terminal_noop"
+    assert processed.trace[-1].status == "skipped"

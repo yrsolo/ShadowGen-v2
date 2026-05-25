@@ -46,6 +46,8 @@ export interface CreateJobRequest {
 export interface CreateJobResponse {
   job_id: string;
   status: JobStatus;
+  cache_status?: string | null;
+  reused_existing_job: boolean;
 }
 
 export interface RenderResult {
@@ -60,6 +62,7 @@ export interface RenderResult {
 export interface JobRecord {
   job_id: string;
   status: JobStatus;
+  request_cache_key?: string | null;
   created_at: string;
   updated_at: string;
   started_at?: string | null;
@@ -69,6 +72,19 @@ export interface JobRecord {
     message: string;
   } | null;
   result?: RenderResult | null;
+  trace: JobTraceStage[];
+  cache_status?: string | null;
+  reused_existing_job: boolean;
+}
+
+export interface JobTraceStage {
+  name: string;
+  status: "running" | "succeeded" | "failed" | "skipped";
+  started_at: string;
+  finished_at?: string | null;
+  duration_ms?: number | null;
+  message?: string | null;
+  error?: string | null;
 }
 
 export interface GetJobResponse {
@@ -138,6 +154,8 @@ export interface SystemDiagnosticsResponse {
         container_name?: string | null;
       } | null;
       last_action?: WorkerActionRecord | null;
+      last_worker_probe?: WorkerDiagnosticProbe | null;
+      last_ml_probe?: WorkerDiagnosticProbe | null;
     } | null;
     capabilities_refreshed_at?: string | null;
     capability_refresh_error?: string | null;
@@ -161,7 +179,17 @@ export type WorkerControlAction =
   | "restart_worker_process"
   | "restart_container"
   | "git_update_rebuild_restart"
-  | "clear_runtime_override";
+  | "clear_runtime_override"
+  | "diagnostic_probe";
+
+export interface WorkerDiagnosticProbe {
+  checked_at: string;
+  ok: boolean;
+  target_url?: string | null;
+  latency_ms?: number | null;
+  mode?: string | null;
+  error?: string | null;
+}
 
 export interface WorkerJobSummary {
   job_id: string;

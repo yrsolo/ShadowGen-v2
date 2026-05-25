@@ -22,6 +22,9 @@ def test_create_job_stores_record_and_publishes_queue_item() -> None:
 
     assert job_repository.get(job.job_id) is not None
     assert job_queue.consume().job_id == job.job_id
+    assert job.cache_status == "miss"
+    assert job.reused_existing_job is False
+    assert [stage.name for stage in job.trace] == ["created", "cache_lookup", "queued"]
 
 
 def test_create_job_reuses_cached_succeeded_job_without_queueing_duplicate() -> None:
@@ -57,4 +60,6 @@ def test_create_job_reuses_cached_succeeded_job_without_queueing_duplicate() -> 
     )
 
     assert second.job_id == first.job_id
+    assert second.cache_status == "hit-succeeded"
+    assert second.reused_existing_job is True
     assert job_queue.consume() is None

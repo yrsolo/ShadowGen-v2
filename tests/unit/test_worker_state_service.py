@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from shadowgen_contracts import (
     LocalRuntimeConfig,
     WorkerCapabilitySnapshot,
+    WorkerDiagnosticProbe,
     WorkerInFlightJob,
     WorkerRuntimeState,
     WorkerVersionInfo,
@@ -187,3 +188,30 @@ def test_worker_state_service_clears_stale_capability_status_when_ml_url_changes
     assert state.async_enabled is None
     assert state.capability_refresh_error is None
     assert state.transition_fallback_active is False
+    assert state.last_ml_probe is None
+
+
+def test_worker_state_service_records_diagnostic_probe(monkeypatch) -> None:
+    store = CountingWorkerStateStore()
+    runtime_config_store = CountingRuntimeConfigStore()
+    clock = {"now": datetime(2026, 5, 25, 12, 0, tzinfo=timezone.utc)}
+    monkeypatch.setattr("shadowgen_worker.state.utc_now", lambda: clock["now"])
+    service = WorkerStateService(
+        worker_state_store=store,
+        runtime_config_store=runtime_config_store,
+        config_legacy_base_url="http://ml:9001",
+        version_info=WorkerVersionInfo(git_commit="abc123"),
+        idle_heartbeat_interval_sec=60.0,
+    )
+
+    service.boot()
+    service.diagnostic_probe(
+        WorkerDiagnosticProbe(checked_at=clock["now"], ok=True, latency_ms=1, mode="worker-control"),
+        WorkerDiagnosticProbe(checked_at=clock["now"], ok=True, target_url="http://ml:9001", latency_ms=12, mode="legacy-sync"),
+    )
+
+    state = store.get()
+    assert state.last_worker_probe is not None
+    assert state.last_ml_probe is not None
+    assert state.last_ml_probe.ok is True
+    assert state.last_ml_probe.mode == "legacy-sync"

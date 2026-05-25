@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -41,3 +41,21 @@ def test_diagnostics_include_worker_state_and_failures() -> None:
     assert payload["worker"]["heartbeat_age_sec"] is not None
     assert payload["worker"]["failed_jobs_count"] >= 1
     assert payload["worker"]["recent_failures"][0]["job_id"] == "job-failed"
+
+
+def test_worker_heartbeat_is_stale_after_five_minutes() -> None:
+    reset_local_state()
+    get_config.cache_clear()
+    get_runtime.cache_clear()
+    runtime = get_runtime()
+
+    runtime.worker_state_store.update(
+        WorkerRuntimeState(
+            status="idle",
+            updated_at=datetime.now(timezone.utc) - timedelta(seconds=301),
+        )
+    )
+
+    response = client.get("/v1/system/diagnostics")
+    assert response.status_code == 200
+    assert response.json()["worker"]["heartbeat_is_stale"] is True

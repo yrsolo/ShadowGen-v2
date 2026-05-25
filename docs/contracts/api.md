@@ -38,12 +38,15 @@ Update the runtime ML override. Requires `X-Admin-Token`.
 
 Queue a worker control command for the local worker runtime. Supported MVP actions:
 
+- `diagnostic_probe`
 - `restart_worker_process`
 - `restart_container`
 - `git_update_rebuild_restart`
 - `clear_runtime_override`
 
 Requires `X-Admin-Token`.
+
+`diagnostic_probe` is the active worker/ML liveness check. The public API only queues the command; the private worker executes it and publishes the result through shared worker runtime state.
 
 ## Response Principles
 
@@ -66,6 +69,8 @@ The worker also exposes a local control surface outside the cloud API:
 - `GET /api/jobs/{job_id}/preview`
 - `GET /api/failures/recent`
 - `GET /api/actions/recent`
+
+The local worker page also exposes recent job timelines, copyable job ids, preview URLs, heartbeat age, and the last worker/ML diagnostic probe result.
 
 ## Local Development Note
 

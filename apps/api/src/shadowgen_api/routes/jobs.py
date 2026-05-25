@@ -30,7 +30,12 @@ def create_job(
         raise HTTPException(status_code=400, detail="Source asset does not exist.")
 
     job = use_case.execute(CreateJobCommand(request=payload.render, source_hash=source_hash))
-    return CreateJobResponse(job_id=job.job_id, status=job.status)
+    return CreateJobResponse(
+        job_id=job.job_id,
+        status=job.status,
+        cache_status=job.cache_status,
+        reused_existing_job=job.reused_existing_job,
+    )
 
 
 @router.get("/{job_id}", response_model=GetJobResponse)

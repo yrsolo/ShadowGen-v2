@@ -9,6 +9,7 @@ from .jobs import (
     GetJobResponse,
     GetJobResultResponse,
     JobRecord,
+    JobTraceStage,
     RenderJobQueuedMessage,
 )
 from .ml_core import (
@@ -41,6 +42,7 @@ from .system import (
     WorkerCapabilityComponent,
     WorkerCapabilitySnapshot,
     WorkerControlAction,
+    WorkerDiagnosticProbe,
     WorkerInFlightJob,
     WorkerJobSummary,
     WorkerRuntimeState,
@@ -61,6 +63,7 @@ __all__ = [
     "GetJobResponse",
     "GetJobResultResponse",
     "JobRecord",
+    "JobTraceStage",
     "JobStatus",
     "MLCoreArtifact",
     "MLCoreAsyncJobResponse",
@@ -99,6 +102,7 @@ __all__ = [
     "WorkerCapabilityComponent",
     "WorkerCapabilitySnapshot",
     "WorkerControlAction",
+    "WorkerDiagnosticProbe",
     "WorkerInFlightJob",
     "WorkerJobSummary",
     "WorkerRuntimeState",

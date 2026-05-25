@@ -23,6 +23,39 @@
 - `error`
 - `result`
 - `request_cache_key`
+- `trace`
+- `cache_status`
+- `reused_existing_job`
+
+## Diagnostic Trace
+
+`JobRecord.trace` is a compact timeline for engineering diagnostics. It stores small metadata only, never image bytes or large ML payloads.
+
+Stage fields:
+
+- `name`
+- `status` - `running`, `succeeded`, `failed`, or `skipped`
+- `started_at`
+- `finished_at`
+- `duration_ms`
+- `message`
+- `error`
+
+Common stages:
+
+- `created`
+- `cache_lookup`
+- `queued`
+- `worker_claimed`
+- `asset_ref_loaded`
+- `asset_bytes_loaded`
+- `ml_probe`
+- `ml_submit`
+- `ml_poll`
+- `artifact_store`
+- `completed`
+- `failed`
+- `terminal_noop`
 
 ## Duplicate Request Reuse
 
@@ -40,6 +73,7 @@ Normalization rule:
 Reuse behavior:
 
 - if a matching job is already `queued`, `running`, or `succeeded`, API returns that existing job instead of creating a new one
+- create-job responses include `cache_status` and `reused_existing_job` so the UI can distinguish a reused job from a newly queued one
 - only `failed` or `canceled` jobs are eligible for a fresh retry with the same parameters
 
 Performance note:
