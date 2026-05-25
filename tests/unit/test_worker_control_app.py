@@ -59,6 +59,7 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     assert status.json()["worker"]["status"] == "idle"
     assert status.json()["self_management"]["enabled"] is False
     assert status.json()["self_management"]["mode"] == "self-contained"
+    assert status.json()["recent_jobs"][0]["job_id"] == "job-ok"
     assert len(status.json()["recent_completed_jobs"][0]["finished_at_display"]) >= 19
     assert status.json()["recent_completed_jobs"][0]["preview_url"] == "/api/jobs/job-ok/preview"
 
@@ -77,3 +78,11 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     )
     assert accepted.status_code == 200
     assert accepted.json()["command"]["action"] == "restart_worker_process"
+
+    probe = client.post(
+        "/api/actions/restart",
+        json={"action": "diagnostic_probe"},
+        headers={"X-Worker-Token": "secret-token"},
+    )
+    assert probe.status_code == 200
+    assert probe.json()["command"]["action"] == "diagnostic_probe"

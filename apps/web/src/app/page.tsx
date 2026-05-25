@@ -19,7 +19,8 @@ import {
   JobRecord,
   LocalRuntimeConfig,
   ShadowModel,
-  SystemDiagnosticsResponse
+  SystemDiagnosticsResponse,
+  WorkerControlAction
 } from "../lib/types";
 
 type InterfaceMode = "min" | "max" | "engineering";
@@ -287,14 +288,7 @@ export default function HomePage() {
     }
   }
 
-  async function handleTriggerWorkerAction(
-    action:
-      | "restart_worker_process"
-      | "restart_container"
-      | "git_update_rebuild_restart"
-      | "clear_runtime_override",
-    adminToken: string
-  ) {
+  async function handleTriggerWorkerAction(action: WorkerControlAction, adminToken: string) {
     setError(null);
     try {
       await createWorkerAction(action, adminToken);

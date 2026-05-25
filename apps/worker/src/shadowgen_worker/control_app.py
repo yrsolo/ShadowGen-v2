@@ -30,6 +30,14 @@ def _has_preview(job) -> bool:
     return True
 
 
+def _copyable_job_id(job_id: str) -> str:
+    return job_id
+
+
+def _job_preview_url(job) -> str | None:
+    return f"/api/jobs/{job.job_id}/preview" if _has_preview(job) else None
+
+
 def create_worker_control_app(*, config, runtime, state_service, version_info) -> FastAPI:
     app = FastAPI(title="ShadowGen Worker Control", version="0.1.0")
     create_action = CreateWorkerActionUseCase(worker_action_store=runtime.worker_action_store)
@@ -41,6 +49,25 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     def status_payload() -> dict:
         state = runtime.worker_state_store.get()
         recent_jobs = runtime.job_repository.list_recent(limit=20)
+        recent_job_cards = [
+            {
+                "job_id": job.job_id,
+                "status": job.status.value,
+                "created_at": job.created_at,
+                "created_at_display": _format_timestamp_seconds(job.created_at),
+                "updated_at": job.updated_at,
+                "updated_at_display": _format_timestamp_seconds(job.updated_at),
+                "finished_at": job.finished_at,
+                "finished_at_display": _format_timestamp_seconds(job.finished_at),
+                "duration_ms": _duration_ms(job),
+                "cache_status": job.cache_status,
+                "reused_existing_job": job.reused_existing_job,
+                "preview_url": _job_preview_url(job),
+                "error_message": job.error.message if job.error else None,
+                "trace": [stage.model_dump(mode="json") for stage in job.trace],
+            }
+            for job in recent_jobs[:10]
+        ]
         recent_completed = [
             {
                 "job_id": job.job_id,
@@ -74,6 +101,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             "queue": runtime.job_queue.diagnostics().model_dump(mode="json"),
             "runtime_config": runtime.runtime_config_store.get().model_dump(mode="json"),
             "recent_completed_jobs": recent_completed,
+            "recent_jobs": recent_job_cards,
             "recent_failures": recent_failures,
             "recent_actions": actions,
             "version": version_info.model_dump(mode="json"),
@@ -145,19 +173,38 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     def dashboard() -> str:
         payload = status_payload()
         recent_jobs_html = "".join(
-            "<div class='job-card'>"
+            "<details class='job-card'>"
+            + "<summary>"
             + (
                 f"<img class='job-preview' src='{escape(item['preview_url'])}' alt='Result preview for {escape(item['job_id'])}' />"
                 if item["preview_url"]
                 else "<div class='job-preview job-preview-empty'>no preview</div>"
             )
             + "<div class='job-meta'>"
-            + f"<div><strong>{escape(item['job_id'])}</strong></div>"
-            + f"<div class='muted'>Finished: {escape(item['finished_at_display'] or 'n/a')}</div>"
-            + f"<div class='muted'>Duration: {item['duration_ms'] or 'n/a'} ms</div>"
+            + f"<div><strong>{escape(item['status'])}</strong> <span class='pill'>{escape(item['cache_status'] or 'fresh')}</span></div>"
+            + f"<div class='muted'>Created: {escape(item['created_at_display'] or 'n/a')}</div>"
+            + f"<div class='muted'>Finished: {escape(item['finished_at_display'] or item['updated_at_display'] or 'n/a')}</div>"
+            + f"<div class='muted'>Duration: {item['duration_ms'] if item['duration_ms'] is not None else 'n/a'} ms</div>"
             + "</div>"
-            + "</div>"
-            for item in payload["recent_completed_jobs"]
+            + "</summary>"
+            + f"<button class='copy-button' onclick=\"navigator.clipboard.writeText('{escape(_copyable_job_id(item['job_id']))}')\">Copy job id</button>"
+            + (
+                "<div class='trace'>"
+                + "".join(
+                    "<div class='trace-row'>"
+                    + f"<span>{escape(stage.get('name', 'stage'))}</span>"
+                    + f"<strong>{escape(stage.get('status', 'unknown'))}</strong>"
+                    + f"<small>{escape(str(stage.get('duration_ms') if stage.get('duration_ms') is not None else 'n/a'))} ms</small>"
+                    + f"<small>{escape(stage.get('error') or stage.get('message') or '')}</small>"
+                    + "</div>"
+                    for stage in item["trace"]
+                )
+                + "</div>"
+                if item["trace"]
+                else "<div class='muted'>No trace recorded for this job.</div>"
+            )
+            + "</details>"
+            for item in payload["recent_jobs"]
         ) or "<div class='list-row'><span>No completed jobs yet</span><strong>idle</strong></div>"
         recent_failures_html = "".join(
             "<div class='list-row'>"
@@ -184,6 +231,10 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             else "Self-contained mode: no repository or Docker socket mounts. Git update/rebuild is disabled for stability."
         )
         capability_notes = payload["worker"].get("capabilities", {}).get("notes", []) if payload["worker"].get("capabilities") else []
+        last_worker_probe = payload["worker"].get("last_worker_probe")
+        last_ml_probe = payload["worker"].get("last_ml_probe")
+        life_ok = payload["heartbeat_age_sec"] is not None and payload["heartbeat_age_sec"] <= 300 and payload["worker"].get("status") != "error"
+        life_class = "life-ok" if life_ok else "life-bad"
         capability_footer = ""
         if payload["worker"].get("capability_refresh_error"):
             capability_footer = "<div class='footer danger'>Current capability refresh issue: " + escape(payload["worker"].get("capability_refresh_error")) + "</div>"
@@ -224,10 +275,20 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     .list {{ display:grid; gap:10px; }}
     .list-row {{ display:flex; justify-content:space-between; gap:14px; align-items:flex-start; background: rgba(255,255,255,0.03); border:1px solid var(--border); border-radius: 16px; padding: 12px 14px; }}
     .job-card {{ display:flex; gap:12px; align-items:flex-start; background: rgba(255,255,255,0.03); border:1px solid var(--border); border-radius: 16px; padding: 12px 14px; }}
+    details.job-card {{ display:block; }}
+    details.job-card summary {{ display:flex; gap:12px; align-items:flex-start; cursor:pointer; list-style:none; }}
+    details.job-card summary::-webkit-details-marker {{ display:none; }}
     .job-preview {{ width:72px; height:72px; object-fit:cover; border-radius: 12px; border:1px solid var(--border); background:#10131b; flex-shrink:0; }}
     .job-preview-empty {{ display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; text-transform:uppercase; }}
     .job-meta {{ display:grid; gap:4px; min-width:0; }}
     .actions {{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 14px; }}
+    .pill {{ display:inline-flex; align-items:center; border:1px solid var(--border); border-radius:999px; padding:2px 8px; color:var(--muted); font-size:12px; }}
+    .life {{ width:10px; height:10px; border-radius:999px; display:inline-block; margin-right:8px; }}
+    .life-ok {{ background: var(--ok); box-shadow:0 0 0 4px rgba(113,247,159,.12); }}
+    .life-bad {{ background: var(--danger); box-shadow:0 0 0 4px rgba(255,125,150,.12); }}
+    .trace {{ margin-top:12px; display:grid; gap:8px; }}
+    .trace-row {{ display:grid; grid-template-columns: 1fr auto auto 1.5fr; gap:10px; border-top:1px solid var(--border); padding-top:8px; color:var(--muted); }}
+    .copy-button {{ margin-top:12px; padding:6px 10px; font-size:12px; }}
     button {{ border:1px solid var(--border); background: #222838; color: var(--text); border-radius: 12px; padding: 10px 14px; cursor:pointer; }}
     button:hover {{ border-color: rgba(125,211,252,0.5); }}
     button:disabled {{ opacity: .45; cursor: not-allowed; }}
@@ -250,6 +311,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
           <h2 class="section-title">Runtime</h2>
           <div class="kv">
             <div><span class="muted">Status</span><strong>{escape(payload["worker"]["status"])}</strong></div>
+            <div><span class="muted">Life</span><strong><span class="life {life_class}"></span>{'fresh' if life_ok else 'stale/error'}</strong></div>
             <div><span class="muted">Heartbeat age</span><strong>{payload["heartbeat_age_sec"] if payload["heartbeat_age_sec"] is not None else "n/a"}s</strong></div>
             <div><span class="muted">Current job</span><strong>{escape(payload["worker"].get("current_job_id") or "n/a")}</strong></div>
             <div><span class="muted">Last completed</span><strong>{escape(payload["worker"].get("last_completed_job_id") or "n/a")}</strong></div>
@@ -258,6 +320,8 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             <div><span class="muted">Env ML URL</span><strong>{escape(config.legacy_ml_base_url or "not set")}</strong></div>
             <div><span class="muted">Runtime ML override</span><strong>{escape(payload["runtime_config"].get("legacy_ml_base_url") or "not set")}</strong></div>
             <div><span class="muted">ML-core mode</span><strong>{escape(payload["worker"].get("ml_core_mode") or "unknown")}</strong></div>
+            <div><span class="muted">Last worker probe</span><strong>{escape((last_worker_probe or {}).get("checked_at") or "n/a")}</strong></div>
+            <div><span class="muted">Last ML probe</span><strong>{escape(str((last_ml_probe or {}).get("ok")) if last_ml_probe else "n/a")} / {escape(str((last_ml_probe or {}).get("latency_ms") or "n/a"))} ms</strong></div>
             <div><span class="muted">Async enabled</span><strong>{escape(str(payload["worker"].get("async_enabled")) if payload["worker"].get("async_enabled") is not None else "unknown")}</strong></div>
             <div><span class="muted">In-flight count</span><strong>{len(payload["worker"].get("in_flight_jobs", []))}</strong></div>
             <div><span class="muted">Queue backend</span><strong>{escape(payload["queue"]["backend"])}</strong></div>
@@ -271,6 +335,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
           </div>
           <div class="actions">
             <button onclick="sendAction('/api/actions/restart','restart_worker_process')">Restart process</button>
+            <button onclick="sendAction('/api/actions/restart','diagnostic_probe')">Probe worker + ML</button>
             <button {update_button_attrs} onclick="sendAction('/api/actions/update','git_update_rebuild_restart')">Update from git</button>
             <button onclick="sendAction('/api/actions/clear-override','clear_runtime_override')">Clear ML override</button>
           </div>

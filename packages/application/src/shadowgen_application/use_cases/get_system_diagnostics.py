@@ -10,6 +10,8 @@ from shadowgen_application.ports import (
 )
 from shadowgen_contracts import JobStatus, StorageDiagnostics, SystemDiagnosticsResponse, WorkerDiagnostics, WorkerJobSummary
 
+WORKER_STALE_THRESHOLD_SEC = 300
+
 
 @dataclass(slots=True)
 class WorkerRuntimeInfo:
@@ -70,7 +72,7 @@ class GetSystemDiagnosticsUseCase:
         heartbeat_is_stale = None
         if runtime_state.updated_at is not None:
             heartbeat_age_sec = int((datetime.now(timezone.utc) - runtime_state.updated_at).total_seconds())
-            heartbeat_is_stale = heartbeat_age_sec > 60
+            heartbeat_is_stale = heartbeat_age_sec > WORKER_STALE_THRESHOLD_SEC
         return SystemDiagnosticsResponse(
             app_env=self.app_env,
             storage=StorageDiagnostics(

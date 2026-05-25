@@ -5,8 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 from shadowgen_contracts import (
     ErrorInfo,
-    JobStatus,
     JobRecord,
+    JobStatus,
+    JobTraceStage,
     RenderResult,
     WorkerCapabilityComponent,
     WorkerCapabilitySnapshot,
@@ -51,11 +52,21 @@ class ProcessJobUseCase:
         if job is None:
             raise JobNotFoundError(f"Job '{job_id}' was not found.")
         if DomainJobStatus(job.status.value).is_terminal:
+            self._record_stage(job, "terminal_noop", "skipped", message=f"Job is already {job.status.value}.")
+            self.job_repository.update(job)
             return job
 
+        self._start_stage(job, "worker_claimed", "Worker claimed the queued job.")
+        self._finish_stage(job, "worker_claimed", "succeeded")
+        self.job_repository.update(job)
+
+        self._start_stage(job, "asset_ref_loaded", "Loading source asset reference.")
         source_ref = self.asset_store.get_ref(job.request.source_asset_id)
         if source_ref is None:
+            self._finish_stage(job, "asset_ref_loaded", "failed", error=f"Asset '{job.request.source_asset_id}' was not found.")
+            self.job_repository.update(job)
             raise AssetNotFoundError(f"Asset '{job.request.source_asset_id}' was not found.")
+        self._finish_stage(job, "asset_ref_loaded", "succeeded", message=f"Source MIME type: {source_ref.mime_type}.")
 
         domain_job = _to_domain_job(job)
         domain_job.start(utc_now())
@@ -63,15 +74,33 @@ class ProcessJobUseCase:
         self.job_repository.update(job)
 
         try:
+            self._start_stage(job, "ml_probe", "Checking worker-side ML capabilities.")
+            self.job_repository.update(job)
             capabilities = self.pipeline.probe()
             self._emit_capabilities(capabilities)
+            self._finish_stage(
+                job,
+                "ml_probe",
+                "succeeded",
+                message=f"Mode: {'async' if capabilities.async_enabled else 'sync'}; degraded: {capabilities.degraded}.",
+            )
+            self.job_repository.update(job)
+
+            self._start_stage(job, "asset_bytes_loaded", "Loading source image bytes.")
+            self.job_repository.update(job)
             source_bytes = self.asset_store.get_bytes(job.request.source_asset_id)
+            self._finish_stage(job, "asset_bytes_loaded", "succeeded", message=f"Loaded {len(source_bytes)} bytes.")
+            self.job_repository.update(job)
+
             context = PipelineContext(
                 request=job.request,
                 source_image=source_bytes,
                 source_mime_type=source_ref.mime_type,
             )
+            self._start_stage(job, "ml_submit", "Submitting render request to ML.")
+            self.job_repository.update(job)
             submission = self.pipeline.submit(context)
+            self._finish_stage(job, "ml_submit", "succeeded", message=f"{submission.mode} / {submission.status}.")
             in_flight = WorkerInFlightJob(
                 business_job_id=job.job_id,
                 mode=submission.mode,
@@ -88,6 +117,8 @@ class ProcessJobUseCase:
                 self._emit_job_finished(processed)
                 return processed
 
+            self._start_stage(job, "ml_poll", "Waiting for async ML completion.")
+            self.job_repository.update(job)
             poll_retries = 0
             while True:
                 if in_flight.ttl_deadline_at is not None and utc_now() > in_flight.ttl_deadline_at:
@@ -104,6 +135,7 @@ class ProcessJobUseCase:
                 self._emit_job_polled(in_flight)
 
                 if poll_result.result is not None and poll_result.status in {"succeeded", "completed"}:
+                    self._finish_stage(job, "ml_poll", "succeeded", message=f"Completed after {poll_retries} retries.")
                     processed = self._complete_job(job, poll_result.result)
                     self._emit_job_finished(processed)
                     return processed
@@ -122,16 +154,20 @@ class ProcessJobUseCase:
                 )
                 raise RuntimeError(error.message)
         except Exception as exc:
+            self._fail_running_stage(job, str(exc))
             domain_job = _to_domain_job(job)
             if not domain_job.is_terminal:
                 domain_job.fail(utc_now())
                 _apply_domain_job(job, domain_job)
             job.error = ErrorInfo(code="processing_failed", message=str(exc))
+            self._record_stage(job, "failed", "failed", message="Job processing failed.", error=str(exc))
             self.job_repository.update(job)
             self._emit_job_failed(job.job_id, str(exc))
             raise
 
     def _complete_job(self, job: JobRecord, pipeline_output) -> JobRecord:
+        self._start_stage(job, "artifact_store", "Storing generated artifacts.")
+        self.job_repository.update(job)
         images = []
         debug_images = []
         for artifact in pipeline_output.artifacts:
@@ -144,6 +180,7 @@ class ProcessJobUseCase:
                 debug_images.append(asset_ref)
             else:
                 images.append(asset_ref)
+        self._finish_stage(job, "artifact_store", "succeeded", message=f"Stored {len(images)} final and {len(debug_images)} debug artifacts.")
 
         job.result = RenderResult(
             images=images,
@@ -154,8 +191,55 @@ class ProcessJobUseCase:
         domain_job = _to_domain_job(job)
         domain_job.complete(utc_now())
         _apply_domain_job(job, domain_job)
+        self._record_stage(job, "completed", "succeeded", message="Job completed successfully.")
         self.job_repository.update(job)
         return job
+
+    def _start_stage(self, job: JobRecord, name: str, message: str | None = None) -> None:
+        job.trace.append(JobTraceStage(name=name, status="running", message=message))
+
+    def _finish_stage(
+        self,
+        job: JobRecord,
+        name: str,
+        status: str,
+        message: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        now = utc_now()
+        for stage in reversed(job.trace):
+            if stage.name == name and stage.status == "running" and stage.finished_at is None:
+                stage.status = status
+                stage.finished_at = now
+                stage.duration_ms = int((now - stage.started_at).total_seconds() * 1000)
+                if message is not None:
+                    stage.message = message
+                stage.error = error
+                return
+        self._record_stage(job, name, status, message=message, error=error)
+
+    def _fail_running_stage(self, job: JobRecord, error: str) -> None:
+        now = utc_now()
+        for stage in reversed(job.trace):
+            if stage.status == "running" and stage.finished_at is None:
+                stage.status = "failed"
+                stage.finished_at = now
+                stage.duration_ms = int((now - stage.started_at).total_seconds() * 1000)
+                stage.error = error
+                return
+
+    def _record_stage(
+        self,
+        job: JobRecord,
+        name: str,
+        status: str,
+        message: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        stage = JobTraceStage(name=name, status=status, message=message, error=error)
+        stage.finished_at = stage.started_at
+        stage.duration_ms = 0
+        job.trace.append(stage)
 
     def _emit_capabilities(self, capabilities: PipelineCapabilitiesSummary) -> None:
         if self.observer is None:

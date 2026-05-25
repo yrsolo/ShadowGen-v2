@@ -14,7 +14,8 @@ Current user flow:
 Current behavior highlights:
 
 - duplicate render submissions with the same image bytes and the same render settings are short-circuited before queue publish and reuse the existing live or completed job
-- the worker control UI shows recent successful jobs with completion timestamps and lightweight previews when the final asset is immediately readable from storage
+- engineering diagnostics and the worker control UI show recent jobs with timestamps, lightweight previews, cache/reuse status, and expandable processing timelines
+- the worker can run an explicit diagnostic probe that checks worker round-trip health and worker-side ML availability without exposing the private worker host
 
 ## Current Runtime Shape
 

@@ -12,8 +12,9 @@ from datetime import datetime, timezone
 import docker
 
 from shadowgen_application.ports import RuntimeConfigStorePort, WorkerActionStorePort
-from shadowgen_contracts import LocalRuntimeConfig, WorkerActionRecord
+from shadowgen_contracts import LocalRuntimeConfig, WorkerActionRecord, WorkerDiagnosticProbe
 
+from shadowgen_adapters.ml_core.adapter import MLCorePipelineAdapter
 from shadowgen_adapters.runtime import build_runtime_adapters
 from shadowgen_worker.config import WorkerConfig
 from shadowgen_worker.metadata import collect_worker_version_info
@@ -53,6 +54,16 @@ class WorkerActionExecutor:
                     self.runtime_config_store.update(LocalRuntimeConfig(legacy_ml_base_url=None))
                     action.summary = "Runtime ML override cleared."
                     action.status = "succeeded"
+                case "diagnostic_probe":
+                    worker_probe, ml_probe = self._run_diagnostic_probe()
+                    self.state_service.diagnostic_probe(worker_probe, ml_probe)
+                    action.summary = (
+                        f"Worker probe ok; ML probe {'ok' if ml_probe.ok else 'failed'}"
+                        + (f" in {ml_probe.latency_ms} ms." if ml_probe.latency_ms is not None else ".")
+                    )
+                    if not ml_probe.ok and ml_probe.error:
+                        action.error_text = ml_probe.error
+                    action.status = "succeeded" if worker_probe.ok else "failed"
                 case "restart_worker_process":
                     action.summary = "Worker process restart requested."
                     action.status = "succeeded"
@@ -90,6 +101,57 @@ class WorkerActionExecutor:
                 self.worker_action_store.update(action)
                 self.state_service.action_state(action)
         return action
+
+    def _run_diagnostic_probe(self) -> tuple[WorkerDiagnosticProbe, WorkerDiagnosticProbe]:
+        started = time.perf_counter()
+        checked_at = utc_now()
+        worker_probe = WorkerDiagnosticProbe(
+            checked_at=checked_at,
+            ok=True,
+            latency_ms=0,
+            mode="worker-control",
+        )
+        target_url = self.state_service.effective_legacy_base_url()
+        if target_url is None:
+            return worker_probe, WorkerDiagnosticProbe(
+                checked_at=checked_at,
+                ok=True,
+                target_url=None,
+                latency_ms=0,
+                mode="stub",
+            )
+        try:
+            adapter = MLCorePipelineAdapter(
+                base_url=target_url,
+                timeout_sec=min(float(self.config.legacy_ml_timeout_sec), 10.0),
+                capabilities_refresh_interval_sec=0,
+            )
+            ok = bool(adapter.ping())
+            mode = None
+            if ok:
+                try:
+                    mode = adapter.probe(force_refresh=True).mode
+                except Exception:
+                    mode = "legacy-ping"
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            return worker_probe, WorkerDiagnosticProbe(
+                checked_at=checked_at,
+                ok=ok,
+                target_url=target_url,
+                latency_ms=elapsed_ms,
+                mode=mode,
+                error=None if ok else "ML ping returned unhealthy.",
+            )
+        except Exception as exc:
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            return worker_probe, WorkerDiagnosticProbe(
+                checked_at=checked_at,
+                ok=False,
+                target_url=target_url,
+                latency_ms=elapsed_ms,
+                mode="unknown",
+                error=str(exc),
+            )
 
     def _restart_process_async(self) -> None:
         def restart() -> None:

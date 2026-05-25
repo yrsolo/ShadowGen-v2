@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from shadowgen_contracts import JobRecord, JobStatus, RenderJobQueuedMessage
+from shadowgen_contracts import JobRecord, JobStatus, JobTraceStage, RenderJobQueuedMessage
 from shadowgen_pipeline.cache_keys import render_request_key
 
 from shadowgen_application.dto import CreateJobCommand
@@ -25,14 +25,34 @@ class CreateJobUseCase:
         )
         cached = self.job_repository.find_by_request_cache_key(request_cache_key)
         if cached is not None and cached.status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.SUCCEEDED}:
-            return cached
+            return cached.model_copy(
+                update={
+                    "cache_status": f"hit-{cached.status.value}",
+                    "reused_existing_job": True,
+                },
+                deep=True,
+            )
 
         job = JobRecord(
             job_id=str(uuid4()),
             status=JobStatus.QUEUED,
             request=command.request,
             request_cache_key=request_cache_key,
+            cache_status="miss",
+            reused_existing_job=False,
+            trace=[
+                _stage("created", "succeeded", "Job record created."),
+                _stage("cache_lookup", "succeeded", "No reusable queued, running, or succeeded job found."),
+                _stage("queued", "succeeded", "Job queued for worker processing."),
+            ],
         )
         self.job_repository.create(job)
         self.job_queue.publish(RenderJobQueuedMessage(job_id=job.job_id))
         return job
+
+
+def _stage(name: str, status: str, message: str) -> JobTraceStage:
+    stage = JobTraceStage(name=name, status=status, message=message)
+    stage.finished_at = stage.started_at
+    stage.duration_ms = 0
+    return stage

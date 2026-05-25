@@ -9,6 +9,7 @@ from shadowgen_contracts import (
     JobRecord,
     WorkerActionRecord,
     WorkerCapabilitySnapshot,
+    WorkerDiagnosticProbe,
     WorkerInFlightJob,
     WorkerRuntimeState,
     WorkerVersionInfo,
@@ -144,6 +145,17 @@ class WorkerStateService:
             self._sync_runtime_metadata_locked(state)
             return self._persist_locked()
 
+    def diagnostic_probe(self, worker_probe: WorkerDiagnosticProbe, ml_probe: WorkerDiagnosticProbe) -> WorkerRuntimeState:
+        with self._lock:
+            state = self._ensure_state_loaded_locked()
+            state.last_worker_probe = worker_probe.model_copy(deep=True)
+            state.last_ml_probe = ml_probe.model_copy(deep=True)
+            state.last_error = None if worker_probe.ok and ml_probe.ok else (worker_probe.error or ml_probe.error)
+            state.status = "processing" if state.in_flight_jobs else ("idle" if worker_probe.ok else "error")
+            state.updated_at = utc_now()
+            self._sync_runtime_metadata_locked(state)
+            return self._persist_locked()
+
     def _ensure_state_loaded_locked(self) -> WorkerRuntimeState:
         if self._state is None:
             self._state = self.worker_state_store.get().model_copy(deep=True)
@@ -159,6 +171,7 @@ class WorkerStateService:
             state.async_enabled = None
             state.capability_refresh_error = None
             state.transition_fallback_active = False
+            state.last_ml_probe = None
             changed = True
         if state.version.model_dump(mode="json") != self.version_info.model_dump(mode="json"):
             state.version = self.version_info.model_copy(deep=True)

@@ -1,5 +1,24 @@
 # Evidence
 
+## 2026-05-25 Diagnostics Trace And Probe Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_create_job.py tests/unit/test_process_job_failures.py tests/unit/test_worker_state_service.py tests/unit/test_worker_control_app.py tests/integration/test_worker_action_api.py tests/integration/test_system_diagnostics_failures.py tests/smoke/test_worker_process_job.py -q`
+- `.\.venv\Scripts\python.exe -m pytest`
+- `cmd /c npm run build` in `apps/web`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+
+## 2026-05-25 Diagnostics Trace And Probe Results
+
+- job records now carry compact diagnostic trace stages with durations, messages, and errors
+- create-job responses now expose `cache_status` and `reused_existing_job`
+- process-job records worker claim, asset loading, ML probe/submit/poll, artifact storage, completion, failure, and terminal no-op stages
+- system diagnostics now treats worker heartbeat as stale after five minutes
+- worker runtime state now stores last worker probe and last ML probe results
+- cloud worker actions and local worker control accept `diagnostic_probe`
+- worker-side diagnostic probe uses the effective ML URL and existing ML-core health or legacy `/test` compatibility path
+- web engineering panel now shows worker life status, probe status, recent jobs with datetime, micro preview, cache badge, copyable job id, and expandable timelines
+- local worker control page now exposes recent job timelines, copyable job ids, worker life indicator, and probe button
+
 ## 2026-05-13 Architecture Remediation Checks
 
 - `python -m pytest tests/unit/test_architecture_boundaries.py tests/unit/test_worker_control_app.py tests/integration/test_ymq_adapter.py tests/unit/test_process_job_failures.py tests/unit/test_job_entity.py -q`

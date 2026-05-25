@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,18 @@ class CreateJobRequest(BaseModel):
 class CreateJobResponse(BaseModel):
     job_id: str
     status: JobStatus
+    cache_status: str | None = None
+    reused_existing_job: bool = False
+
+
+class JobTraceStage(BaseModel):
+    name: str
+    status: Literal["running", "succeeded", "failed", "skipped"]
+    started_at: datetime = Field(default_factory=utc_now)
+    finished_at: datetime | None = None
+    duration_ms: int | None = None
+    message: str | None = None
+    error: str | None = None
 
 
 class RenderJobQueuedMessage(BaseModel):
@@ -37,6 +50,9 @@ class JobRecord(BaseModel):
     finished_at: datetime | None = None
     error: ErrorInfo | None = None
     result: RenderResult | None = None
+    trace: list[JobTraceStage] = Field(default_factory=list)
+    cache_status: str | None = None
+    reused_existing_job: bool = False
 
 
 class GetJobResponse(BaseModel):
@@ -55,5 +71,6 @@ __all__ = [
     "GetJobResponse",
     "GetJobResultResponse",
     "JobRecord",
+    "JobTraceStage",
     "RenderJobQueuedMessage",
 ]

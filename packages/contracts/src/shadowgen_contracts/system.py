@@ -9,6 +9,7 @@ WorkerControlAction = Literal[
     "restart_container",
     "git_update_rebuild_restart",
     "clear_runtime_override",
+    "diagnostic_probe",
 ]
 
 WorkerActionStatus = Literal["queued", "running", "succeeded", "failed"]
@@ -89,6 +90,15 @@ class WorkerActionRecord(BaseModel):
     log_excerpt: str | None = None
 
 
+class WorkerDiagnosticProbe(BaseModel):
+    checked_at: datetime
+    ok: bool
+    target_url: str | None = None
+    latency_ms: int | None = None
+    mode: str | None = None
+    error: str | None = None
+
+
 class CreateWorkerActionRequest(BaseModel):
     action: WorkerControlAction
 
@@ -118,6 +128,8 @@ class WorkerRuntimeState(BaseModel):
     transition_fallback_active: bool = False
     version: WorkerVersionInfo = WorkerVersionInfo()
     last_action: WorkerActionRecord | None = None
+    last_worker_probe: WorkerDiagnosticProbe | None = None
+    last_ml_probe: WorkerDiagnosticProbe | None = None
 
 
 __all__ = [
@@ -129,6 +141,7 @@ __all__ = [
     "WorkerCapabilityComponent",
     "WorkerCapabilitySnapshot",
     "WorkerControlAction",
+    "WorkerDiagnosticProbe",
     "WorkerInFlightJob",
     "WorkerJobSummary",
     "WorkerRuntimeState",
