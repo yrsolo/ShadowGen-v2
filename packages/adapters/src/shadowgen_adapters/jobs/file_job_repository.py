@@ -25,6 +25,17 @@ class FileJobRepository:
     def update(self, job: JobRecord) -> None:
         self._write(job)
 
+    def delete(self, job: JobRecord) -> None:
+        path = self.root_dir / f"{job.job_id}.json"
+        if path.exists():
+            path.unlink()
+        if job.request_cache_key:
+            index_path = self.index_dir / f"{job.request_cache_key}.json"
+            if index_path.exists():
+                payload = json.loads(index_path.read_text(encoding="utf-8"))
+                if payload.get("job_id") == job.job_id:
+                    index_path.unlink()
+
     def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         indexed = self._get_indexed(cache_key)
         if indexed is not None:

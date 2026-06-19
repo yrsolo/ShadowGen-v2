@@ -1,10 +1,14 @@
 from uuid import uuid4
+from datetime import datetime, timezone
 
 from shadowgen_contracts import JobRecord, JobStatus, JobTraceStage, RenderJobQueuedMessage
 from shadowgen_pipeline.cache_keys import render_request_key
 
 from shadowgen_application.dto import CreateJobCommand
 from shadowgen_application.ports import AssetStorePort, JobQueuePublisherPort, JobRepositoryPort
+
+
+LIVE_CACHE_STALE_THRESHOLD_SEC = 300
 
 
 class CreateJobUseCase:
@@ -24,7 +28,15 @@ class CreateJobUseCase:
             request=command.request,
         )
         cached = self.job_repository.find_by_request_cache_key(request_cache_key)
-        if cached is not None and cached.status in {JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.SUCCEEDED}:
+        if cached is not None and cached.status == JobStatus.SUCCEEDED:
+            return cached.model_copy(
+                update={
+                    "cache_status": "hit-succeeded",
+                    "reused_existing_job": True,
+                },
+                deep=True,
+            )
+        if cached is not None and cached.status in {JobStatus.QUEUED, JobStatus.RUNNING} and not _is_live_cache_stale(cached):
             return cached.model_copy(
                 update={
                     "cache_status": f"hit-{cached.status.value}",
@@ -33,16 +45,22 @@ class CreateJobUseCase:
                 deep=True,
             )
 
+        cache_message = "No reusable queued, running, or succeeded job found."
+        cache_status = "miss"
+        if cached is not None and cached.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
+            cache_status = f"miss-stale-{cached.status.value}"
+            cache_message = f"Stale {cached.status.value} cache record ignored after {LIVE_CACHE_STALE_THRESHOLD_SEC} seconds."
+
         job = JobRecord(
             job_id=str(uuid4()),
             status=JobStatus.QUEUED,
             request=command.request,
             request_cache_key=request_cache_key,
-            cache_status="miss",
+            cache_status=cache_status,
             reused_existing_job=False,
             trace=[
                 _stage("created", "succeeded", "Job record created."),
-                _stage("cache_lookup", "succeeded", "No reusable queued, running, or succeeded job found."),
+                _stage("cache_lookup", "succeeded", cache_message),
                 _stage("queued", "succeeded", "Job queued for worker processing."),
             ],
         )
@@ -56,3 +74,8 @@ def _stage(name: str, status: str, message: str) -> JobTraceStage:
     stage.finished_at = stage.started_at
     stage.duration_ms = 0
     return stage
+
+
+def _is_live_cache_stale(job: JobRecord) -> bool:
+    age = datetime.now(timezone.utc) - job.updated_at
+    return age.total_seconds() > LIVE_CACHE_STALE_THRESHOLD_SEC

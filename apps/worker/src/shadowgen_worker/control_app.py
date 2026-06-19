@@ -7,7 +7,8 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from shadowgen_application.use_cases.create_worker_action import CreateWorkerActionUseCase
-from shadowgen_contracts import CreateWorkerActionRequest, JobStatus
+from shadowgen_application.use_cases.update_runtime_config import UpdateRuntimeConfigUseCase
+from shadowgen_contracts import CreateWorkerActionRequest, JobStatus, LocalRuntimeConfig, UpdateLocalRuntimeConfigRequest
 
 
 def _duration_ms(job) -> int | None:
@@ -41,6 +42,7 @@ def _job_preview_url(job) -> str | None:
 def create_worker_control_app(*, config, runtime, state_service, version_info) -> FastAPI:
     app = FastAPI(title="ShadowGen Worker Control", version="0.1.0")
     create_action = CreateWorkerActionUseCase(worker_action_store=runtime.worker_action_store)
+    update_runtime_config = UpdateRuntimeConfigUseCase(runtime_config_store=runtime.runtime_config_store)
 
     def require_token(x_worker_token: str | None) -> None:
         if x_worker_token != config.worker_control_token:
@@ -150,6 +152,21 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     @app.get("/api/actions/recent")
     def api_actions_recent() -> list[dict]:
         return status_payload()["recent_actions"]
+
+    @app.put("/api/runtime-config")
+    def api_update_runtime_config(
+        payload: UpdateLocalRuntimeConfigRequest,
+        x_worker_token: str | None = Header(default=None),
+    ) -> dict:
+        require_token(x_worker_token)
+        updated = update_runtime_config.execute(
+            LocalRuntimeConfig(legacy_ml_base_url=payload.legacy_ml_base_url)
+        )
+        state = state_service.heartbeat_idle()
+        return {
+            "config": updated.model_dump(mode="json"),
+            "effective_legacy_base_url": state.effective_legacy_base_url,
+        }
 
     @app.post("/api/actions/restart")
     def api_restart(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
@@ -333,6 +350,16 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
           <div class="token-row">
             <input id="token" type="password" placeholder="Worker control token" />
           </div>
+          <div class="token-row">
+            <input
+              id="ml-url"
+              type="url"
+              value="{escape(payload['runtime_config'].get('legacy_ml_base_url') or payload['effective_legacy_base_url'] or '')}"
+              placeholder="http://host.docker.internal:9001"
+            />
+            <button onclick="saveRuntimeConfig()">Save ML URL</button>
+          </div>
+          <div id="runtime-config-result" class="footer"></div>
           <div class="actions">
             <button onclick="sendAction('/api/actions/restart','restart_worker_process')">Restart process</button>
             <button onclick="sendAction('/api/actions/restart','diagnostic_probe')">Probe worker + ML</button>
@@ -381,6 +408,30 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
       }}
       alert('Action submitted.');
       location.reload();
+    }}
+
+    async function saveRuntimeConfig() {{
+      const token = document.getElementById('token').value;
+      const mlUrl = document.getElementById('ml-url').value.trim();
+      const result = document.getElementById('runtime-config-result');
+      result.textContent = 'Saving...';
+      const response = await fetch('/api/runtime-config', {{
+        method: 'PUT',
+        headers: {{
+          'Content-Type': 'application/json',
+          'X-Worker-Token': token
+        }},
+        body: JSON.stringify({{ legacy_ml_base_url: mlUrl || null }})
+      }});
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {{
+        result.textContent = 'Save failed: ' + (payload?.detail || response.status);
+        result.classList.add('danger');
+        return;
+      }}
+      result.classList.remove('danger');
+      result.textContent = 'Saved. Effective ML URL: ' + (payload.effective_legacy_base_url || 'not set');
+      setTimeout(() => location.reload(), 700);
     }}
   </script>
 </body>

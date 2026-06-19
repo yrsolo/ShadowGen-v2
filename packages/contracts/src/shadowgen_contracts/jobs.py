@@ -65,12 +65,24 @@ class GetJobResultResponse(BaseModel):
     result: RenderResult | None = None
 
 
+class MarkJobFailedRequest(BaseModel):
+    reason: str = "Marked failed by operator."
+
+
+class JobMutationResponse(BaseModel):
+    job_id: str
+    status: JobStatus | None = None
+    deleted: bool = False
+
+
 __all__ = [
     "CreateJobRequest",
     "CreateJobResponse",
     "GetJobResponse",
     "GetJobResultResponse",
+    "JobMutationResponse",
     "JobRecord",
     "JobTraceStage",
+    "MarkJobFailedRequest",
     "RenderJobQueuedMessage",
 ]

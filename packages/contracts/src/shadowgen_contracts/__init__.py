@@ -1,6 +1,6 @@
 from .assets import CreateAssetResponse, GetAssetResponse
 from .common import AssetRef, ProcessingMetrics
-from .diagnostics import QueueDiagnostics, StorageDiagnostics, SystemDiagnosticsResponse, WorkerDiagnostics
+from .diagnostics import LostJobDiagnostic, QueueDiagnostics, StorageDiagnostics, SystemDiagnosticsResponse, WorkerDiagnostics
 from .enums import AssetKind, BackgroundMode, JobStatus, OutputFormat
 from .errors import ErrorInfo, ErrorResponse
 from .jobs import (
@@ -8,8 +8,10 @@ from .jobs import (
     CreateJobResponse,
     GetJobResponse,
     GetJobResultResponse,
+    JobMutationResponse,
     JobRecord,
     JobTraceStage,
+    MarkJobFailedRequest,
     RenderJobQueuedMessage,
 )
 from .ml_core import (
@@ -64,8 +66,10 @@ __all__ = [
     "GetJobResultResponse",
     "JobRecord",
     "JobTraceStage",
+    "JobMutationResponse",
     "JobStatus",
     "MLCoreArtifact",
+    "LostJobDiagnostic",
     "MLCoreAsyncJobResponse",
     "MLCoreAsyncSubmitResponse",
     "MLCoreBackendCapability",
@@ -85,6 +89,7 @@ __all__ = [
     "QueueDiagnostics",
     "StorageDiagnostics",
     "RenderJobQueuedMessage",
+    "MarkJobFailedRequest",
     "OutputFormat",
     "OutputSpec",
     "PreprocessSpec",

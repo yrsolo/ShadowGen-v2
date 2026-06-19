@@ -13,6 +13,7 @@ from shadowgen_application.use_cases import (
     UpdateRuntimeConfigUseCase,
     WorkerRuntimeInfo,
     CreateWorkerActionUseCase,
+    ManageJobUseCase,
 )
 from shadowgen_application.use_cases.create_job import CreateJobUseCase
 from shadowgen_application.use_cases.get_job import GetJobUseCase
@@ -69,6 +70,11 @@ def get_get_job_use_case() -> GetJobUseCase:
 def get_get_job_result_use_case() -> GetJobResultUseCase:
     runtime = get_runtime()
     return GetJobResultUseCase(job_repository=runtime.job_repository)
+
+
+def get_manage_job_use_case() -> ManageJobUseCase:
+    runtime = get_runtime()
+    return ManageJobUseCase(job_repository=runtime.job_repository)
 
 
 def get_upload_asset_use_case() -> UploadAssetUseCase:

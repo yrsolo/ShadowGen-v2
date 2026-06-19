@@ -1,5 +1,75 @@
 # Evidence
 
+## 2026-06-19 Worker UI ML URL Update
+
+- local worker control now exposes token-protected `PUT /api/runtime-config`
+- the worker dashboard includes an editable ML URL field and `Save ML URL` button
+- saving updates the shared runtime override and immediately republishes the effective ML URL into worker state
+- unauthorized runtime-config updates return HTTP `401`
+- the change applies to subsequent worker jobs and capability probes
+
+## 2026-06-19 Worker UI ML URL Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_worker_control_app.py tests/unit/test_worker_state_service.py -q` -> `6 passed`
+- `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider` -> `42 passed, 1 skipped`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+
+## 2026-05-26 Stuck Running Job Visibility And Cache Fix
+
+- Live diagnostics showed the worker was fresh and `idle`, YMQ had `queued=0` and `in_flight=0`, while the UI could still display a `running` job.
+- `CreateJobUseCase` now reuses `queued` / `running` cache records only while they are fresh; stale live cache records are ignored after 300 seconds and a new queued job is created.
+- `GET /v1/system/diagnostics` now scans a wider job window and prioritizes active `queued` / `running` jobs before completed history.
+- The result view now shows a long-running warning after one minute and exposes a copyable job id in both compact and full modes.
+
+## 2026-05-26 Stuck Running Job Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_create_job.py tests/integration/test_system_diagnostics_failures.py -q`
+- `cmd /c npm run build` in `apps/web`
+- `.\.venv\Scripts\python.exe -m pytest`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+
+## 2026-05-26 Lost Job Cleanup
+
+- diagnostics now separates stale live metadata into `lost_jobs`
+- each lost job includes age, a reason, and concrete evidence such as missing worker current/in-flight state, idle worker status, and empty queue counters
+- operator API can mark a job failed through `POST /v1/jobs/{job_id}/mark-failed`
+- operator API can delete job metadata and matching request-cache index through `DELETE /v1/jobs/{job_id}`
+- web engineering panel renders lost jobs separately from recent jobs with `Mark failed`, `Delete metadata`, and `Copy job id`
+- both cleanup actions require `X-Admin-Token`
+
+## 2026-05-26 Lost Job Cleanup Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests/integration/test_api_jobs.py tests/integration/test_system_diagnostics_failures.py tests/unit/test_create_job.py -q`
+- `cmd /c npm run build` in `apps/web`
+- `.\.venv\Scripts\python.exe -m pytest`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+
+## 2026-05-26 Lost Job Cleanup Cloud Deployment
+
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260526-2 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260526-2 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260526-2`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260526-2`
+- `yc serverless container revision deploy` activated API revision `bba2giej0k6i3iil36su` with image `shadowgen-api:20260526-2`.
+- `yc serverless container revision deploy` activated web revision `bba852878p2ms545dmdu` with image `shadowgen-web:20260526-2`.
+- `cmd /c scripts\deploy-yc-shadowgen.cmd` refreshed API and web gateway specs.
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` returned `{"status":"ok"}`.
+- `curl.exe -I https://shadowgen.solofarm.ru` returned HTTP `200`.
+- live diagnostics returned `lost_jobs` with three lost records; the top record included evidence that the worker is idle and queue has no queued or in-flight messages.
+
+## 2026-05-26 Stuck Running Job Cloud Deployment
+
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260526-1 .`
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260526-1 .`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260526-1`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260526-1`
+- `yc serverless container revision deploy` activated API revision `bbasb5q21q30clln7gke` with image `shadowgen-api:20260526-1`.
+- `yc serverless container revision deploy` activated web revision `bbadudle7lr7regjlv4q` with image `shadowgen-web:20260526-1`.
+- `cmd /c scripts\deploy-yc-shadowgen.cmd` refreshed API and web gateway specs.
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` returned `{"status":"ok"}`.
+- `curl.exe -I https://shadowgen.solofarm.ru` returned HTTP `200`.
+- Live diagnostics after deploy showed current active job `5d3a5f17-98f7-4405-8c85-1cfbf5ce0a00` first in `recent_jobs` with status `running`, while queue counts were zero and worker status was `idle`.
+
 ## 2026-05-26 Worker Container Script Consolidation
 
 - `scripts/run-worker-cloud-container.cmd` is now the only worker container launcher.

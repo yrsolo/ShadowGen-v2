@@ -62,6 +62,9 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     assert status.json()["recent_jobs"][0]["job_id"] == "job-ok"
     assert len(status.json()["recent_completed_jobs"][0]["finished_at_display"]) >= 19
     assert status.json()["recent_completed_jobs"][0]["preview_url"] == "/api/jobs/job-ok/preview"
+    dashboard = client.get("/")
+    assert dashboard.status_code == 200
+    assert "Save ML URL" in dashboard.text
 
     preview = client.get("/api/jobs/job-ok/preview")
     assert preview.status_code == 200
@@ -86,3 +89,22 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     )
     assert probe.status_code == 200
     assert probe.json()["command"]["action"] == "diagnostic_probe"
+
+    config_denied = client.put(
+        "/api/runtime-config",
+        json={"legacy_ml_base_url": "http://new-ml:9001"},
+    )
+    assert config_denied.status_code == 401
+
+    config_updated = client.put(
+        "/api/runtime-config",
+        json={"legacy_ml_base_url": "http://new-ml:9001"},
+        headers={"X-Worker-Token": "secret-token"},
+    )
+    assert config_updated.status_code == 200
+    assert config_updated.json()["config"]["legacy_ml_base_url"] == "http://new-ml:9001"
+    assert config_updated.json()["effective_legacy_base_url"] == "http://new-ml:9001"
+
+    updated_status = client.get("/api/status").json()
+    assert updated_status["runtime_config"]["legacy_ml_base_url"] == "http://new-ml:9001"
+    assert updated_status["effective_legacy_base_url"] == "http://new-ml:9001"

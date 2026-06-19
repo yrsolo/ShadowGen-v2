@@ -12,6 +12,8 @@ import {
   getDiagnostics,
   getJob,
   getRuntimeConfig,
+  deleteJob,
+  markJobFailed,
   updateRuntimeConfig,
   uploadAsset
 } from "../lib/api-client";
@@ -298,6 +300,26 @@ export default function HomePage() {
     }
   }
 
+  async function handleMarkJobFailed(jobId: string, reason: string, adminToken: string) {
+    setError(null);
+    try {
+      await markJobFailed(jobId, reason, adminToken);
+      await refreshDiagnostics();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to mark job failed");
+    }
+  }
+
+  async function handleDeleteJob(jobId: string, adminToken: string) {
+    setError(null);
+    try {
+      await deleteJob(jobId, adminToken);
+      await refreshDiagnostics();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to delete job");
+    }
+  }
+
   useEffect(() => {
     if (!job || !isJobStillProcessing(job)) {
       return;
@@ -570,6 +592,8 @@ export default function HomePage() {
             runtimeConfig={runtimeConfig}
             onSaveRuntimeConfig={handleSaveRuntimeConfig}
             onTriggerWorkerAction={handleTriggerWorkerAction}
+            onMarkJobFailed={handleMarkJobFailed}
+            onDeleteJob={handleDeleteJob}
           />
         </>
       ) : userControls}
