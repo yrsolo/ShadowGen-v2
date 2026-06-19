@@ -33,3 +33,5 @@ apps/api/src/*.egg-info/
 .next/
 node_modules/
 .shadowgen-local/
+
+design/ref
