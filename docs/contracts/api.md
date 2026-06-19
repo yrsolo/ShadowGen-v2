@@ -22,9 +22,25 @@ Get job status and metadata.
 
 Get the processing result, if available.
 
+### `POST /v1/jobs/{job_id}/mark-failed`
+
+Operator action for stale/lost job cleanup. Requires `X-Admin-Token`.
+
+The endpoint marks a job as `failed`, records an `operator_marked_failed` trace stage, and stores the supplied reason in the job error.
+
+### `DELETE /v1/jobs/{job_id}`
+
+Operator action for stale/lost job cleanup. Requires `X-Admin-Token`.
+
+The endpoint deletes job metadata and the request-cache index entry when it points at the deleted job.
+
 ### `GET /v1/system/diagnostics`
 
 Engineering-safe diagnostics for storage backend, queue/backend state, worker heartbeat, and recent jobs.
+
+The recent job list prioritizes active `queued` and `running` jobs before completed history so stalled work is visible even when older than the latest successful renders.
+
+Lost jobs are returned separately in `lost_jobs`. A lost job is a stale `queued` or `running` metadata record whose job id is not present in worker current/in-flight state and whose queue/worker evidence does not show matching active work.
 
 ### `GET /v1/system/runtime-config`
 
@@ -69,8 +85,10 @@ The worker also exposes a local control surface outside the cloud API:
 - `GET /api/jobs/{job_id}/preview`
 - `GET /api/failures/recent`
 - `GET /api/actions/recent`
+- `PUT /api/runtime-config` - updates `legacy_ml_base_url`, requires `X-Worker-Token`
 
 The local worker page also exposes recent job timelines, copyable job ids, preview URLs, heartbeat age, and the last worker/ML diagnostic probe result.
+It includes an editable ML URL field; saving writes the shared runtime override and refreshes the effective worker URL immediately.
 
 ## Local Development Note
 

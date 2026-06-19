@@ -56,6 +56,16 @@ Common stages:
 - `completed`
 - `failed`
 - `terminal_noop`
+- `operator_mark_failed`
+
+## Lost Job Cleanup
+
+Engineering diagnostics can classify stale live jobs as lost when metadata says `queued` or `running` but worker and queue state do not show matching active work.
+
+Operator cleanup endpoints:
+
+- `POST /v1/jobs/{job_id}/mark-failed` records the job as failed with an operator reason.
+- `DELETE /v1/jobs/{job_id}` removes the job metadata and its request-cache index entry when it points at that job.
 
 ## Duplicate Request Reuse
 
@@ -74,6 +84,7 @@ Reuse behavior:
 
 - if a matching job is already `queued`, `running`, or `succeeded`, API returns that existing job instead of creating a new one
 - create-job responses include `cache_status` and `reused_existing_job` so the UI can distinguish a reused job from a newly queued one
+- `queued` and `running` cache records are reused only while they are fresh; stale live records are ignored so a lost old job cannot trap new submissions forever
 - only `failed` or `canceled` jobs are eligible for a fresh retry with the same parameters
 
 Performance note:

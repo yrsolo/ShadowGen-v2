@@ -2,13 +2,13 @@
 
 ## Steps
 
-1. Compare the three worker container scripts and choose the stable single behavior.
-2. Update `scripts/run-worker-cloud-container.cmd` to be the detached restart-policy launcher.
-3. Delete the detached and self-managed variants.
-4. Replace all docs and env-example references with the single script.
-5. Run docs checks and a text search for stale script names.
+1. Add a local worker runtime-config update endpoint protected by `X-Worker-Token`.
+2. Update worker state after the shared runtime override changes.
+3. Add editable ML URL controls to the local worker HTML dashboard.
+4. Add endpoint/UI contract tests.
+5. Update worker docs and evidence.
 
 ## Checks
 
+- `python -m pytest tests/unit/test_worker_control_app.py tests/unit/test_worker_state_service.py`
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
-- `rg -n "run-worker-cloud-container-detached|run-worker-cloud-container-self-managed|self-managed" README.md docs scripts .env.shadowgen.example`

@@ -59,3 +59,36 @@ def test_worker_heartbeat_is_stale_after_five_minutes() -> None:
     response = client.get("/v1/system/diagnostics")
     assert response.status_code == 200
     assert response.json()["worker"]["heartbeat_is_stale"] is True
+
+
+def test_diagnostics_prioritize_active_jobs_over_recent_completed_jobs() -> None:
+    reset_local_state()
+    get_config.cache_clear()
+    get_runtime.cache_clear()
+    runtime = get_runtime()
+
+    active_asset = runtime.asset_store.put_bytes(b"active-image", AssetKind.SOURCE, "image/png")
+    runtime.job_repository.create(
+        JobRecord(
+            job_id="job-active-old",
+            status=JobStatus.RUNNING,
+            request=RenderRequest(source_asset_id=active_asset.asset_id),
+            updated_at=datetime.now(timezone.utc) - timedelta(hours=2),
+        )
+    )
+    for index in range(12):
+        asset_ref = runtime.asset_store.put_bytes(f"done-{index}".encode(), AssetKind.SOURCE, "image/png")
+        runtime.job_repository.create(
+            JobRecord(
+                job_id=f"job-done-{index}",
+                status=JobStatus.SUCCEEDED,
+                request=RenderRequest(source_asset_id=asset_ref.asset_id),
+                updated_at=datetime.now(timezone.utc) - timedelta(minutes=index),
+            )
+        )
+
+    response = client.get("/v1/system/diagnostics")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lost_jobs"][0]["job"]["job_id"] == "job-active-old"
+    assert "worker runtime state does not list this job" in " ".join(payload["lost_jobs"][0]["evidence"])

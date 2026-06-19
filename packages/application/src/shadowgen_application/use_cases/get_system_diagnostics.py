@@ -8,9 +8,10 @@ from shadowgen_application.ports import (
     WorkerActionStorePort,
     WorkerStateStorePort,
 )
-from shadowgen_contracts import JobStatus, StorageDiagnostics, SystemDiagnosticsResponse, WorkerDiagnostics, WorkerJobSummary
+from shadowgen_contracts import JobStatus, LostJobDiagnostic, StorageDiagnostics, SystemDiagnosticsResponse, WorkerDiagnostics, WorkerJobSummary
 
 WORKER_STALE_THRESHOLD_SEC = 300
+DIAGNOSTICS_JOB_SCAN_LIMIT = 500
 
 
 @dataclass(slots=True)
@@ -50,7 +51,12 @@ class GetSystemDiagnosticsUseCase:
         self.storage_runtime = storage_runtime
 
     def execute(self, limit: int = 10) -> SystemDiagnosticsResponse:
-        recent_jobs = self.job_repository.list_recent(limit=max(limit, 30))
+        recent_jobs = self.job_repository.list_recent(limit=max(limit, DIAGNOSTICS_JOB_SCAN_LIMIT))
+        runtime_state = self.worker_state_store.get()
+        queue = self.queue_inspector.diagnostics()
+        lost_jobs = _find_lost_jobs(recent_jobs, runtime_state, queue)
+        lost_ids = {item.job.job_id for item in lost_jobs}
+        visible_recent_jobs = _prioritize_visible_jobs([job for job in recent_jobs if job.job_id not in lost_ids], limit)
         recent_failures = [job for job in recent_jobs if job.status == JobStatus.FAILED][:5]
         recent_completed = [
             WorkerJobSummary(
@@ -67,7 +73,6 @@ class GetSystemDiagnosticsUseCase:
             if job.status == JobStatus.SUCCEEDED
         ][:5]
         recent_actions = self.worker_action_store.list_recent(limit=5)
-        runtime_state = self.worker_state_store.get()
         heartbeat_age_sec = None
         heartbeat_is_stale = None
         if runtime_state.updated_at is not None:
@@ -81,7 +86,7 @@ class GetSystemDiagnosticsUseCase:
                 prefix=self.storage_runtime.prefix,
                 notes=self.storage_runtime.notes,
             ),
-            queue=self.queue_inspector.diagnostics(),
+            queue=queue,
             worker=WorkerDiagnostics(
                 render_backend=self.worker_runtime.render_backend,
                 legacy_base_url=self.worker_runtime.legacy_base_url,
@@ -101,5 +106,61 @@ class GetSystemDiagnosticsUseCase:
                 recent_actions=recent_actions,
             ),
             runtime_config=self.runtime_config_store.get(),
-            recent_jobs=recent_jobs[:limit],
+            recent_jobs=visible_recent_jobs,
+            lost_jobs=lost_jobs[:10],
         )
+
+
+def _prioritize_visible_jobs(jobs, limit: int):
+    active_statuses = {JobStatus.QUEUED, JobStatus.RUNNING}
+    active_jobs = [job for job in jobs if job.status in active_statuses]
+    ordered = [*active_jobs, *jobs]
+    seen = set()
+    result = []
+    for job in ordered:
+        if job.job_id in seen:
+            continue
+        seen.add(job.job_id)
+        result.append(job)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _find_lost_jobs(jobs, runtime_state, queue) -> list[LostJobDiagnostic]:
+    now = datetime.now(timezone.utc)
+    current_ids = {runtime_state.current_job_id} if runtime_state.current_job_id else set()
+    current_ids.update(item.business_job_id for item in runtime_state.in_flight_jobs)
+    lost = []
+    for job in jobs:
+        if job.status not in {JobStatus.QUEUED, JobStatus.RUNNING}:
+            continue
+        age_sec = int((now - job.updated_at).total_seconds())
+        if age_sec <= WORKER_STALE_THRESHOLD_SEC:
+            continue
+        evidence = [
+            f"job status is {job.status.value}",
+            f"job updated {age_sec} seconds ago",
+        ]
+        if job.job_id not in current_ids:
+            evidence.append("worker runtime state does not list this job as current or in-flight")
+        if runtime_state.status == "idle":
+            evidence.append("worker status is idle")
+        if queue.queued_count == 0 and queue.in_flight_count == 0:
+            evidence.append("queue diagnostics report no queued or in-flight messages")
+        if job.job_id in current_ids and runtime_state.status != "idle":
+            continue
+        reason = (
+            "Job is still marked live in metadata, but the worker and queue do not show matching active work."
+        )
+        lost.append(
+            LostJobDiagnostic(
+                job=job,
+                age_sec=age_sec,
+                reason=reason,
+                evidence=evidence,
+                suggested_action="mark_failed",
+            )
+        )
+    lost.sort(key=lambda item: item.age_sec, reverse=True)
+    return lost

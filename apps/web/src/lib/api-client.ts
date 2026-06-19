@@ -5,6 +5,7 @@ import {
   CreateWorkerActionResponse,
   GetJobResponse,
   GetJobResultResponse,
+  JobMutationResponse,
   LocalRuntimeConfig,
   SystemDiagnosticsResponse,
   WorkerControlAction,
@@ -184,6 +185,29 @@ export async function createWorkerAction(action: WorkerControlAction, adminToken
   });
   if (!response.ok) {
     throw new Error(`Failed to create worker action: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function markJobFailed(jobId: string, reason: string, adminToken: string): Promise<JobMutationResponse> {
+  const response = await fetch(`${API_BASE}/v1/jobs/${jobId}/mark-failed`, {
+    method: "POST",
+    headers: jsonHeaders(adminToken),
+    body: JSON.stringify({ reason })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to mark job failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteJob(jobId: string, adminToken: string): Promise<JobMutationResponse> {
+  const response = await fetch(`${API_BASE}/v1/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: jsonHeaders(adminToken)
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete job: ${response.status}`);
   }
   return response.json();
 }

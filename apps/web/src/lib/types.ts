@@ -169,6 +169,15 @@ export interface SystemDiagnosticsResponse {
     legacy_ml_base_url?: string | null;
   };
   recent_jobs: JobRecord[];
+  lost_jobs: LostJobDiagnostic[];
+}
+
+export interface LostJobDiagnostic {
+  job: JobRecord;
+  age_sec: number;
+  reason: string;
+  evidence: string[];
+  suggested_action: "mark_failed" | "delete" | string;
 }
 
 export interface LocalRuntimeConfig {
@@ -217,4 +226,10 @@ export interface WorkerActionRecord {
 
 export interface CreateWorkerActionResponse {
   command: WorkerActionRecord;
+}
+
+export interface JobMutationResponse {
+  job_id: string;
+  status?: JobStatus | null;
+  deleted: boolean;
 }

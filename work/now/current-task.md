@@ -2,25 +2,20 @@
 
 ## Task
 
-Consolidate worker container launch scripts.
+Allow the local worker web interface to change the effective ML service address.
 
 ## Goal
 
-Keep one clear worker-container entrypoint instead of three similar scripts:
-
-1. keep `scripts/run-worker-cloud-container.cmd`
-2. make it the stable detached always-on mode
-3. remove the detached and self-managed variants
-4. update docs and tracking so operator instructions point to the single script
+Let an operator update the worker runtime ML URL from `http://localhost:8081` without editing Object Storage or using the cloud Engineering page.
 
 ## Scope Of This Stage
 
-- merge detached restart-policy behavior into `run-worker-cloud-container.cmd`
-- remove obsolete worker container script variants
-- update README, overview, reference docs, and env comments
-- run docs/link checks
+- add a token-protected local runtime-config update endpoint
+- add an ML URL input and save action to the worker dashboard
+- publish the changed effective URL into worker runtime state immediately
+- update tests, docs, and evidence
 
 ## Risks
 
-- stale docs may still point to removed scripts
-- losing the foreground mode is intentional, but logs must remain discoverable through `docker logs -f shadowgen-worker`
+- changing the URL affects subsequent jobs and capability probing
+- the endpoint must require the worker control token

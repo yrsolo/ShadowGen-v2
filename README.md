@@ -83,6 +83,7 @@ Worker control endpoints:
 
 - UI: `http://localhost:8081`
 - JSON status: `http://localhost:8081/api/status`
+- runtime ML URL update: `PUT http://localhost:8081/api/runtime-config` with `X-Worker-Token`
 
 ## Public URLs
 

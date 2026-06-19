@@ -17,6 +17,11 @@ class InMemoryJobRepository:
         self._storage[job.job_id] = job
         self._index(job)
 
+    def delete(self, job: JobRecord) -> None:
+        self._storage.pop(job.job_id, None)
+        if job.request_cache_key and self._request_cache_index.get(job.request_cache_key) == job.job_id:
+            self._request_cache_index.pop(job.request_cache_key, None)
+
     def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         indexed_job_id = self._request_cache_index.get(cache_key)
         if indexed_job_id is not None:

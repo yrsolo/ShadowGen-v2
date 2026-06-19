@@ -30,6 +30,13 @@ class S3JobRepository:
     def update(self, job: JobRecord) -> None:
         self._write(job)
 
+    def delete(self, job: JobRecord) -> None:
+        self.client.delete_object(Bucket=self.bucket, Key=self._job_key(job.job_id))
+        if job.request_cache_key:
+            indexed = self._get_indexed(job.request_cache_key)
+            if indexed is not None and indexed.job_id == job.job_id:
+                self.client.delete_object(Bucket=self.bucket, Key=self._request_cache_index_key(job.request_cache_key))
+
     def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         return self._get_indexed(cache_key)
 

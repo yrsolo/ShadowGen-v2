@@ -39,6 +39,14 @@ class StorageDiagnostics(BaseModel):
     notes: list[str] = []
 
 
+class LostJobDiagnostic(BaseModel):
+    job: JobRecord
+    age_sec: int
+    reason: str
+    evidence: list[str] = []
+    suggested_action: str = "mark_failed"
+
+
 class SystemDiagnosticsResponse(BaseModel):
     app_env: str
     storage: StorageDiagnostics
@@ -46,6 +54,7 @@ class SystemDiagnosticsResponse(BaseModel):
     worker: WorkerDiagnostics
     runtime_config: LocalRuntimeConfig
     recent_jobs: list[JobRecord]
+    lost_jobs: list[LostJobDiagnostic] = []
 
 
-__all__ = ["QueueDiagnostics", "StorageDiagnostics", "SystemDiagnosticsResponse", "WorkerDiagnostics"]
+__all__ = ["LostJobDiagnostic", "QueueDiagnostics", "StorageDiagnostics", "SystemDiagnosticsResponse", "WorkerDiagnostics"]

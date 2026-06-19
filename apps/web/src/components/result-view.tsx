@@ -37,6 +37,11 @@ export function ResultView({
   const timerLabel = processing ? formatElapsed(elapsedMs) : lastElapsedMs !== null ? formatElapsed(lastElapsedMs) : "--:--.--";
   const statusLabel = visibleJob?.status ?? "idle";
   const compact = variant === "min";
+  const longRunning = processing && elapsedMs > 60_000;
+
+  async function copyJobId(jobId: string) {
+    await navigator.clipboard.writeText(jobId);
+  }
 
   if (!visibleJob) {
     return (
@@ -92,6 +97,11 @@ export function ResultView({
           </div>
         </div>
         {visibleJob.error ? <div className="error-box">Error: {visibleJob.error.message}</div> : null}
+        {longRunning ? (
+          <div className="error-box">
+            This job has been running for more than a minute. Copy the job id and check Engineering diagnostics.
+          </div>
+        ) : null}
         <div className="min-result-footer">
           <div className="min-result-meta">Time: {timerLabel}</div>
           <div className="min-result-meta">Status: {statusLabel}</div>
@@ -105,6 +115,9 @@ export function ResultView({
             </button>
           )}
         </div>
+        <button className="ghost-button compact-button" type="button" onClick={() => copyJobId(visibleJob.job_id)}>
+          Copy job id
+        </button>
       </section>
     );
   }
@@ -131,7 +144,15 @@ export function ResultView({
         </div>
       </div>
       {visibleJob.error ? <div className="error-box">Error: {visibleJob.error.message}</div> : null}
+      {longRunning ? (
+        <div className="error-box">
+          This job has been running for more than a minute. Worker is expected to pick it up quickly; check Engineering diagnostics with this job id.
+        </div>
+      ) : null}
       <div className="inline-metrics">
+        <button className="metric-chip metric-chip-button" type="button" onClick={() => copyJobId(visibleJob.job_id)}>
+          Copy Job ID
+        </button>
         <div className="metric-chip">Job ID: {visibleJob.job_id}</div>
         <div className="metric-chip">Updated: {new Date(visibleJob.updated_at).toLocaleString()}</div>
         <div className="metric-chip">Total ms: {visibleJob.result?.metrics.total_ms ?? 0}</div>

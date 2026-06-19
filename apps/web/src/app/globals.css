@@ -433,6 +433,11 @@ a {
   color: var(--text);
 }
 
+.danger-button {
+  border-color: rgba(255, 107, 107, 0.45);
+  color: #ffd6d6;
+}
+
 .save-button {
   background: rgba(15, 76, 33, 0.35);
   border-color: rgba(83, 216, 106, 0.55);
@@ -534,6 +539,15 @@ a {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   color: var(--muted);
+}
+
+.metric-chip-button {
+  cursor: pointer;
+}
+
+.metric-chip-button:hover {
+  border-color: rgba(255, 209, 102, 0.38);
+  color: var(--text);
 }
 
 .processing-chip {
@@ -655,6 +669,13 @@ a {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.lost-job-card {
+  border: 1px solid rgba(255, 107, 107, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 107, 107, 0.06);
   overflow: hidden;
 }
 

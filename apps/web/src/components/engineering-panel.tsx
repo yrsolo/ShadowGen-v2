@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { getAssetContentUrl } from "../lib/api-client";
-import { JobRecord, LocalRuntimeConfig, SystemDiagnosticsResponse, WorkerControlAction } from "../lib/types";
+import { JobRecord, LocalRuntimeConfig, LostJobDiagnostic, SystemDiagnosticsResponse, WorkerControlAction } from "../lib/types";
 
 interface EngineeringPanelProps {
   diagnostics: SystemDiagnosticsResponse | null;
@@ -12,6 +12,8 @@ interface EngineeringPanelProps {
   runtimeConfig: LocalRuntimeConfig | null;
   onSaveRuntimeConfig: (config: LocalRuntimeConfig, adminToken: string) => Promise<void>;
   onTriggerWorkerAction: (action: WorkerControlAction, adminToken: string) => Promise<void>;
+  onMarkJobFailed: (jobId: string, reason: string, adminToken: string) => Promise<void>;
+  onDeleteJob: (jobId: string, adminToken: string) => Promise<void>;
 }
 
 function formatDateTime(value?: string | null): string {
@@ -96,18 +98,87 @@ function JobDiagnosticsCard({ job }: { job: JobRecord }) {
   );
 }
 
+function formatAge(ageSec: number): string {
+  if (ageSec < 60) {
+    return `${ageSec}s`;
+  }
+  if (ageSec < 3600) {
+    return `${Math.floor(ageSec / 60)}m ${ageSec % 60}s`;
+  }
+  return `${Math.floor(ageSec / 3600)}h ${Math.floor((ageSec % 3600) / 60)}m`;
+}
+
+function LostJobCard({
+  item,
+  busy,
+  onMarkFailed,
+  onDelete
+}: {
+  item: LostJobDiagnostic;
+  busy: boolean;
+  onMarkFailed: (item: LostJobDiagnostic) => void;
+  onDelete: (item: LostJobDiagnostic) => void;
+}) {
+  return (
+    <details className="lost-job-card" open>
+      <summary className="diagnostic-job-summary">
+        <div className="diagnostic-job-preview diagnostic-job-preview-empty">lost</div>
+        <div className="diagnostic-job-main">
+          <div className="diagnostic-job-title">
+            <strong>{formatDateTime(item.job.created_at)}</strong>
+            <span className="status-pill failed">{item.job.status}</span>
+            <span className="status-pill">age {formatAge(item.age_sec)}</span>
+          </div>
+          <div className="diagnostic-job-meta">
+            <span>{item.reason}</span>
+          </div>
+        </div>
+      </summary>
+      <div className="diagnostic-job-details">
+        <div className="error-box">
+          This job is live only in metadata. Worker/queue state does not show matching active work.
+        </div>
+        <ul className="meta-list">
+          {item.evidence.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ul>
+        <div className="button-row">
+          <button className="secondary-button" type="button" disabled={busy} onClick={() => onMarkFailed(item)}>
+            Mark failed
+          </button>
+          <button className="ghost-button compact-button danger-button" type="button" disabled={busy} onClick={() => onDelete(item)}>
+            Delete metadata
+          </button>
+          <button className="ghost-button compact-button" type="button" onClick={() => navigator.clipboard.writeText(item.job.job_id)}>
+            Copy job id
+          </button>
+        </div>
+        <div className="kv">
+          <div><span className="muted">Job id</span><strong>{item.job.job_id}</strong></div>
+          <div><span className="muted">Updated</span><strong>{formatDateTime(item.job.updated_at)}</strong></div>
+          <div><span className="muted">Cache key</span><strong>{item.job.request_cache_key ?? "n/a"}</strong></div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function EngineeringPanel({
   diagnostics,
   onRefresh,
   loading,
   runtimeConfig,
   onSaveRuntimeConfig,
-  onTriggerWorkerAction
+  onTriggerWorkerAction,
+  onMarkJobFailed,
+  onDeleteJob
 }: EngineeringPanelProps) {
   const [legacyUrl, setLegacyUrl] = useState(runtimeConfig?.legacy_ml_base_url ?? "");
   const [adminToken, setAdminToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState<WorkerControlAction | null>(null);
+  const [mutatingJobId, setMutatingJobId] = useState<string | null>(null);
 
   useEffect(() => {
     setLegacyUrl(runtimeConfig?.legacy_ml_base_url ?? "");
@@ -130,6 +201,31 @@ export function EngineeringPanel({
       await onTriggerWorkerAction(action, adminToken);
     } finally {
       setActing(null);
+    }
+  }
+
+  async function handleMarkFailed(item: LostJobDiagnostic) {
+    setMutatingJobId(item.job.job_id);
+    try {
+      await onMarkJobFailed(
+        item.job.job_id,
+        `Marked failed from engineering diagnostics. ${item.reason}`,
+        adminToken
+      );
+    } finally {
+      setMutatingJobId(null);
+    }
+  }
+
+  async function handleDelete(item: LostJobDiagnostic) {
+    if (!window.confirm(`Delete metadata for job ${item.job.job_id}? This cannot be undone.`)) {
+      return;
+    }
+    setMutatingJobId(item.job.job_id);
+    try {
+      await onDeleteJob(item.job.job_id, adminToken);
+    } finally {
+      setMutatingJobId(null);
     }
   }
 
@@ -213,6 +309,22 @@ export function EngineeringPanel({
           {!diagnostics ? null : (
             <div className="panel engineering-subpanel stack">
               <div className="stack">
+                {diagnostics.lost_jobs.length ? (
+                  <>
+                    <strong>Lost jobs</strong>
+                    <div className="diagnostic-job-list">
+                      {diagnostics.lost_jobs.map((item) => (
+                        <LostJobCard
+                          key={item.job.job_id}
+                          item={item}
+                          busy={mutatingJobId === item.job.job_id}
+                          onMarkFailed={handleMarkFailed}
+                          onDelete={handleDelete}
+                        />
+                      ))}
+                    </div>
+                  </>
+                ) : null}
                 <strong>Recent jobs</strong>
                 <div className="diagnostic-job-list">
                   {diagnostics.recent_jobs.length ? diagnostics.recent_jobs.map((job) => (
