@@ -91,6 +91,6 @@ class LegacyHttpAdapter:
     def ping(self) -> bool:
         try:
             response = httpx.get(f"{self.base_url}/test", timeout=min(self.timeout_sec, 5.0))
-            return response.status_code < 500
+            return 200 <= response.status_code < 300
         except Exception:
             return False

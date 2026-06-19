@@ -8,6 +8,7 @@ class PipelineContext:
     request: RenderRequest
     source_image: bytes
     source_mime_type: str
+    request_id: str | None = None
 
 
 @dataclass(slots=True)

@@ -1,16 +1,20 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class MLCoreHealthResponse(BaseModel):
     status: str
+    service_version: str | None = None
+    active_backend_mode: str | None = None
     async_enabled: bool = False
+    accepting_jobs: bool = True
+    preferred_submit_mode: str | None = None
 
 
 class MLCoreBackendCapability(BaseModel):
-    kind: str
+    backend_kind: str = Field(validation_alias=AliasChoices("backend_kind", "kind"))
     available: bool = True
     supports_batching: bool = False
     supports_async: bool = False
@@ -30,8 +34,15 @@ class MLCoreComponentCapability(BaseModel):
 
 
 class MLCoreCapabilitiesResponse(BaseModel):
+    service_version: str | None = None
+    model_version: str | None = None
+    active_backend_mode: str | None = None
+    degraded: bool = False
     execution_default_backend: str | None = None
     async_enabled: bool = False
+    supported_submit_modes: tuple[str, ...] | None = None
+    preferred_submit_mode: str | None = None
+    batching_strategy: str = "none"
     components: list[MLCoreComponentCapability] = []
 
 
@@ -85,10 +96,16 @@ class MLCoreArtifact(BaseModel):
 class MLCoreMetrics(BaseModel):
     total_ms: int = 0
     decode_ms: int | None = None
+    geometry_ms: int | None = None
+    detection_ms: int | None = None
     segmentation_ms: int | None = None
+    foreground_refinement_ms: int | None = None
+    depth_ms: int | None = None
+    normals_ms: int | None = None
     shadow_ms: int | None = None
     composition_ms: int | None = None
     encode_ms: int | None = None
+    cache_ms: int | None = None
 
 
 class MLCoreModelInfo(BaseModel):
@@ -119,6 +136,7 @@ class MLCoreAsyncSubmitResponse(BaseModel):
     status: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    submit_mode: str | None = None
 
 
 class MLCoreAsyncJobResponse(BaseModel):
@@ -127,5 +145,6 @@ class MLCoreAsyncJobResponse(BaseModel):
     status: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
-    error: MLCoreErrorBody | None = None
+    submit_mode: str | None = None
+    error: MLCoreErrorBody | str | None = None
     result: MLCoreRenderResponse | None = None

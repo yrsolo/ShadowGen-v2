@@ -47,6 +47,7 @@ function JobDiagnosticsCard({ job }: { job: JobRecord }) {
   const finalImage = job.result?.images?.[0] ?? null;
   const duration = durationMs(job);
   const cacheLabel = job.reused_existing_job ? job.cache_status ?? "cache-hit" : job.cache_status ?? "fresh";
+  const mlMetrics = Object.entries(job.result?.metrics ?? {}).filter(([, value]) => value != null);
 
   async function copyJobId() {
     await navigator.clipboard.writeText(job.job_id);
@@ -83,6 +84,19 @@ function JobDiagnosticsCard({ job }: { job: JobRecord }) {
           <div><span className="muted">Cache key</span><strong>{job.request_cache_key ?? "n/a"}</strong></div>
         </div>
         {job.error ? <div className="error-box">Error: {job.error.message}</div> : null}
+        {mlMetrics.length ? (
+          <div className="diagnostic-timeline">
+            <strong>ML metrics</strong>
+            {mlMetrics.map(([name, value]) => (
+              <div className="diagnostic-stage" key={`${job.job_id}-metric-${name}`}>
+                <span>{name}</span>
+                <strong>{value} ms</strong>
+                <small />
+                <small />
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="diagnostic-timeline">
           {(job.trace ?? []).length ? job.trace.map((stage, index) => (
             <div className="diagnostic-stage" key={`${job.job_id}-${stage.name}-${index}`}>

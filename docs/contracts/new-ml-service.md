@@ -79,7 +79,9 @@ Example response:
 ```json
 {
   "status": "ok",
-  "async_enabled": true
+  "async_enabled": true,
+  "accepting_jobs": true,
+  "preferred_submit_mode": "async"
 }
 ```
 
@@ -98,6 +100,8 @@ Example response:
 {
   "execution_default_backend": "triton",
   "async_enabled": true,
+  "supported_submit_modes": ["sync", "async"],
+  "preferred_submit_mode": "async",
   "components": [
     {
       "name": "segmenter",
@@ -109,7 +113,7 @@ Example response:
       "fallback_reason": null,
       "backends": [
         {
-          "kind": "triton",
+          "backend_kind": "triton",
           "available": true,
           "supports_batching": true,
           "supports_async": true,
@@ -196,6 +200,8 @@ Purpose:
 - optional string
 - used for tracing and logs
 - echoed back in the response when provided
+- for async worker calls it is the ML-service idempotency key
+- the worker sends the durable ShadowGen business `job_id`, not `source_asset_id`, so different renders of the same source image do not collapse into one ML job
 
 #### `pipeline_version`
 
@@ -407,7 +413,7 @@ Output sizing rules:
 {
   "job_id": "ml-job-123",
   "request_id": "optional-trace-id",
-  "status": "queued",
+  "status": "pending",
   "created_at": "2026-04-12T12:00:00Z",
   "updated_at": "2026-04-12T12:00:00Z"
 }
@@ -419,7 +425,7 @@ Output sizing rules:
 {
   "job_id": "ml-job-123",
   "request_id": "optional-trace-id",
-  "status": "succeeded",
+  "status": "completed",
   "created_at": "2026-04-12T12:00:00Z",
   "updated_at": "2026-04-12T12:00:01Z",
   "result": {
@@ -488,10 +494,16 @@ Minimum required field:
 Recommended additional fields:
 
 - `decode_ms`
+- `geometry_ms`
+- `detection_ms`
 - `segmentation_ms`
+- `foreground_refinement_ms`
+- `depth_ms`
+- `normals_ms`
 - `shadow_ms`
 - `composition_ms`
 - `encode_ms`
+- `cache_ms`
 
 ### Warnings
 
@@ -628,9 +640,12 @@ From the ShadowGen worker perspective, the service must map cleanly to this inte
 
 This means the worker adapter should be able to:
 
-1. build the request body from `RenderRequest` and the source image bytes
-2. call the ML service
-3. map returned artifacts into `PipelineOutput`
+1. call `GET /health` and `GET /v1/capabilities`
+2. classify the service as ML-core only when that handshake succeeds
+3. classify the service as legacy only when `GET /test` returns 2xx
+4. build the request body from `RenderRequest` and the source image bytes
+5. choose `/v1/render` or `/v1/render/jobs` from advertised submit modes
+6. map returned artifacts and stage metrics into `PipelineOutput`
 
 The ML service must not require:
 
