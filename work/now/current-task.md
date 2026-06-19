@@ -2,20 +2,21 @@
 
 ## Task
 
-Allow the local worker web interface to change the effective ML service address.
+Make the worker automatically distinguish the legacy ShadowGEN server from the new ShadowGen ML Service and use the matching endpoints.
 
 ## Goal
 
-Let an operator update the worker runtime ML URL from `http://localhost:8081` without editing Object Storage or using the cloud Engineering page.
+Use the new ML service handshake and sync/async render API when `/health` and `/v1/capabilities` match the current contract, while retaining strict legacy fallback through `/test` and `/v1/process`.
 
 ## Scope Of This Stage
 
-- add a token-protected local runtime-config update endpoint
-- add an ML URL input and save action to the worker dashboard
-- publish the changed effective URL into worker runtime state immediately
-- update tests, docs, and evidence
+- align ML-core capability DTOs with the new service schema
+- make legacy detection require a successful `/test` response instead of accepting `404`
+- support new async statuses `pending`, `completed`, and `cancelled`
+- preserve explicit `v1-gan` / `v2-diff` model mapping
+- update diagnostics, tests, docs, and evidence
 
 ## Risks
 
-- changing the URL affects subsequent jobs and capability probing
-- the endpoint must require the worker control token
+- malformed capability payloads must not silently route to legacy endpoints
+- legacy server compatibility must remain covered

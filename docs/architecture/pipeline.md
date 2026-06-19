@@ -4,7 +4,10 @@ At the first stage the pipeline is treated as a single black-box process wrapped
 
 ## Current Model
 
-Worker -> RenderPipeline -> LegacyPipelineAdapter -> Old ML Core
+```text
+Worker -> RenderPipeline -> MLCorePipelineAdapter -> New ML Service
+                         \\-> LegacyHttpAdapter -> Old ShadowGEN server
+```
 
 ## Why This Layer Exists
 
@@ -12,9 +15,11 @@ The new system should depend on a stable processing interface, not on direct imp
 
 ## Current Adapter Split
 
-- `LegacyStubAdapter` for deterministic local tests
-- `LegacyHttpAdapter` for optional live integration with the old ML server
-- `LegacyPipelineAdapter` as a small facade selected by runtime config
+- `MLCorePipelineAdapter` probes `/health` and `/v1/capabilities`, then selects sync `/v1/render` or async `/v1/render/jobs`
+- `LegacyHttpAdapter` is selected only when ML-core handshake is unavailable and `/test` returns 2xx
+- `MLCoreStubAdapter` provides deterministic local behavior when no remote URL is configured
+
+The adapter forwards `shadow.model` unchanged, including `v1-gan` and `v2-diff`. For async calls it uses the durable business job id as `request_id`, matching ML-service idempotency semantics.
 
 ## Evolution Path
 

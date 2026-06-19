@@ -2,13 +2,14 @@
 
 ## Steps
 
-1. Add a local worker runtime-config update endpoint protected by `X-Worker-Token`.
-2. Update worker state after the shared runtime override changes.
-3. Add editable ML URL controls to the local worker HTML dashboard.
-4. Add endpoint/UI contract tests.
-5. Update worker docs and evidence.
+1. Align worker-side health/capabilities DTOs with the authoritative new service schema.
+2. Tighten service detection so only a 2xx `/test` identifies legacy.
+3. Select sync/async endpoints from capabilities and support current async status vocabulary.
+4. Add tests using realistic new-service capability and job payloads plus legacy fallback tests.
+5. Update integration docs and evidence.
 
 ## Checks
 
-- `python -m pytest tests/unit/test_worker_control_app.py tests/unit/test_worker_state_service.py`
+- `python -m pytest tests/unit/test_ml_core_adapter.py tests/unit/test_legacy_http_adapter.py`
+- `python -m pytest`
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`

@@ -55,6 +55,17 @@ export interface RenderResult {
   debug_images: AssetRef[];
   metrics: {
     total_ms: number;
+    decode_ms?: number | null;
+    geometry_ms?: number | null;
+    detection_ms?: number | null;
+    segmentation_ms?: number | null;
+    foreground_refinement_ms?: number | null;
+    depth_ms?: number | null;
+    normals_ms?: number | null;
+    shadow_ms?: number | null;
+    composition_ms?: number | null;
+    encode_ms?: number | null;
+    cache_ms?: number | null;
   };
   warnings: string[];
 }

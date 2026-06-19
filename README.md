@@ -16,6 +16,7 @@ Current behavior highlights:
 - duplicate render submissions with the same image bytes and the same render settings are short-circuited before queue publish and reuse the existing live or completed job
 - engineering diagnostics and the worker control UI show recent jobs with timestamps, lightweight previews, cache/reuse status, and expandable processing timelines
 - the worker can run an explicit diagnostic probe that checks worker round-trip health and worker-side ML availability without exposing the private worker host
+- the worker auto-detects the new ML service through `/health` + `/v1/capabilities`, selects `/v1/render` or `/v1/render/jobs`, and falls back to legacy `/v1/process` only when `/test` returns 2xx
 
 ## Current Runtime Shape
 

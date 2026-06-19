@@ -117,3 +117,14 @@ def test_legacy_http_adapter_ping_uses_test_endpoint(monkeypatch) -> None:
     adapter = LegacyHttpAdapter("http://legacy-server:9001", timeout_sec=7.0)
     assert adapter.ping() is True
     assert captured["url"] == "http://legacy-server:9001/test"
+
+
+def test_legacy_http_adapter_ping_rejects_test_404(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "shadowgen_adapters.legacy_pipeline.http_adapter.httpx.get",
+        lambda url, timeout: FakeResponse({"detail": "Not Found"}, status_code=404),
+    )
+
+    adapter = LegacyHttpAdapter("http://new-server:9001", timeout_sec=7.0)
+
+    assert adapter.ping() is False

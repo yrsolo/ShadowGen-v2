@@ -19,7 +19,7 @@ Submodules:
 - `runtime/`
   - runtime config, worker state, worker action stores, and adapter factory wiring
 - `ml_core/`
-  - new ML-core sync/async adapter, DTO mapping, transport errors, and stub behavior
+  - new ML-core handshake detection, sync/async adapter, current status mapping, stage metrics, transport errors, and stub behavior
 - `legacy_pipeline/`
   - old ShadowGEN sync compatibility bridge, mapper, HTTP adapter, and stub adapter
 
@@ -39,3 +39,4 @@ Runtime note:
 - the asset stores persist a source hash in metadata so request-cache lookup can avoid downloading the full source image on a cache hit
 - S3 job repository cache lookup does not fall back to listing every job on a miss; this keeps `POST /v1/jobs` stable as job history grows
 - queue adapters expose `receive()` delivery envelopes; YMQ messages are deleted only when the worker calls `ack()`
+- ML service detection never treats `/test` 404 as legacy readiness; legacy mode requires a 2xx `/test`, while a successful ML-core handshake always uses `/v1/render*`

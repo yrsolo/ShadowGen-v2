@@ -66,7 +66,7 @@ def map_ml_core_response_to_pipeline_output(response: MLCoreRenderResponse) -> P
         )
     return PipelineOutput(
         artifacts=artifacts,
-        metrics=ProcessingMetrics(total_ms=response.metrics.total_ms),
+        metrics=ProcessingMetrics.model_validate(response.metrics.model_dump()),
         warnings=response.warnings,
     )
 

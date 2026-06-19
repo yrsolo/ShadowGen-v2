@@ -96,6 +96,7 @@ class ProcessJobUseCase:
                 request=job.request,
                 source_image=source_bytes,
                 source_mime_type=source_ref.mime_type,
+                request_id=job.job_id,
             )
             self._start_stage(job, "ml_submit", "Submitting render request to ML.")
             self.job_repository.update(job)

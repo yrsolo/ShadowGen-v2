@@ -1,5 +1,24 @@
 # Evidence
 
+## 2026-06-19 New ML Service Auto-Detection
+
+- worker capability DTOs now accept the current ML-service handshake fields, including `supported_submit_modes`, `preferred_submit_mode`, `degraded`, and `backends[*].backend_kind`
+- a successful `/health` plus `/v1/capabilities` handshake always selects the new ML-core adapter and never probes `/test`
+- legacy mode now requires `/test` to return 2xx; `/test` 404 is no longer treated as a healthy legacy service
+- sync ML-core mode uses `POST /v1/render`; async mode uses `POST /v1/render/jobs` and polls `GET /v1/render/jobs/{job_id}`
+- async statuses `pending`, `running`, `completed`, `failed`, and `cancelled` are supported
+- worker sends the durable business `job_id` as ML `request_id`, preventing different renders of one source asset from collapsing under ML idempotency
+- `shadow.model` is forwarded unchanged, including `v2-diff`
+- ML stage metrics are preserved in job results and shown in expanded Engineering diagnostics
+
+## 2026-06-19 New ML Service Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests/unit/test_ml_core_adapter.py tests/unit/test_legacy_http_adapter.py tests/unit/test_process_job_failures.py tests/smoke/test_worker_process_job.py -q -p no:cacheprovider` -> `13 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider` -> `46 passed, 1 skipped`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- direct `localhost:9001` handshake was not available from this workspace session, so live render was not exercised
+
 ## 2026-06-19 Worker UI ML URL Update
 
 - local worker control now exposes token-protected `PUT /api/runtime-config`

@@ -69,7 +69,7 @@ class MLCorePipelineAdapter:
             request=context.request,
             source_bytes=context.source_image,
             source_mime_type=context.source_mime_type,
-            request_id=context.request.source_asset_id,
+            request_id=context.request_id or context.request.source_asset_id,
         )
 
         try:
@@ -127,16 +127,19 @@ class MLCorePipelineAdapter:
             if response.status_code >= 400:
                 self._raise_http_error(response)
             payload = MLCoreAsyncJobResponse.model_validate(response.json())
-            if payload.status in {"queued", "running"}:
-                return PipelinePollResult(status=payload.status)
+            if payload.status in {"pending", "queued", "running"}:
+                return PipelinePollResult(status="queued" if payload.status == "pending" else payload.status)
             if payload.status in {"succeeded", "completed"} and payload.result is not None:
                 return PipelinePollResult(
                     status="succeeded",
                     result=map_ml_core_response_to_pipeline_output(payload.result),
                 )
             if payload.status == "failed":
-                error = payload.error or ErrorInfo(code="processing_failed", message="Async ML core job failed.")
-                return PipelinePollResult(status="failed", error=ErrorInfo.model_validate(error), retryable=False)
+                error = _normalize_async_error(payload.error, "Async ML core job failed.")
+                return PipelinePollResult(status="failed", error=error, retryable=False)
+            if payload.status in {"cancelled", "canceled"}:
+                error = _normalize_async_error(payload.error, "Async ML core job was cancelled.")
+                return PipelinePollResult(status="failed", error=error, retryable=False)
             return PipelinePollResult(
                 status="failed",
                 error=ErrorInfo(code="processing_failed", message=f"Unknown async status: {payload.status}"),
@@ -163,7 +166,7 @@ class MLCorePipelineAdapter:
             return None
         try:
             response = httpx.get(f"{self.base_url}/health", timeout=min(self.timeout_sec, 5.0))
-            if response.status_code < 500:
+            if 200 <= response.status_code < 300:
                 return True
         except Exception:
             pass
@@ -176,17 +179,49 @@ class MLCorePipelineAdapter:
         try:
             health_response = httpx.get(f"{self.base_url}/health", timeout=min(self.timeout_sec, 5.0))
             health_response.raise_for_status()
-            health = MLCoreHealthResponse.model_validate(health_response.json())
             capabilities_response = httpx.get(f"{self.base_url}/v1/capabilities", timeout=min(self.timeout_sec, 10.0))
             capabilities_response.raise_for_status()
+        except Exception as exc:
+            if self._legacy is not None and self._legacy.ping():
+                return PipelineCapabilitiesSummary(
+                    mode="legacy-sync",
+                    async_enabled=False,
+                    execution_default_backend="legacy-http",
+                    refreshed_at_iso=_utc_now().isoformat(),
+                    degraded=False,
+                    notes=[
+                        "Legacy sync compatibility path is active. "
+                        "The old ML service does not expose ML-core /health or /v1/capabilities."
+                    ],
+                )
+            raise MLCoreRetryableError(f"ML service handshake failed: {exc}") from exc
+
+        try:
+            health = MLCoreHealthResponse.model_validate(health_response.json())
             capabilities = MLCoreCapabilitiesResponse.model_validate(capabilities_response.json())
+            supported_modes = set(
+                capabilities.supported_submit_modes
+                or (("sync", "async") if capabilities.async_enabled else ("sync",))
+            )
+            preferred_mode = (
+                capabilities.preferred_submit_mode
+                or health.preferred_submit_mode
+                or ("async" if capabilities.async_enabled else "sync")
+            )
+            prefer_async = (
+                health.accepting_jobs
+                and health.async_enabled
+                and capabilities.async_enabled
+                and "async" in supported_modes
+                and preferred_mode == "async"
+            )
             return PipelineCapabilitiesSummary(
-                mode="async" if health.async_enabled or capabilities.async_enabled else "sync",
-                async_enabled=health.async_enabled or capabilities.async_enabled,
+                mode="async" if prefer_async else "sync",
+                async_enabled=prefer_async,
                 execution_default_backend=capabilities.execution_default_backend,
                 refreshed_at_iso=_utc_now().isoformat(),
-                degraded=False,
-                notes=[],
+                degraded=capabilities.degraded or health.status != "ok",
+                notes=[] if health.accepting_jobs else ["ML service is not currently accepting async jobs."],
                 components=[
                     {
                         "name": component.name,
@@ -201,19 +236,7 @@ class MLCorePipelineAdapter:
                 ],
             )
         except Exception as exc:
-            if self._legacy is not None and self._legacy.ping():
-                return PipelineCapabilitiesSummary(
-                    mode="legacy-sync",
-                    async_enabled=False,
-                    execution_default_backend="legacy-http",
-                    refreshed_at_iso=_utc_now().isoformat(),
-                    degraded=False,
-                    notes=[
-                        "Legacy sync compatibility path is active. "
-                        "The old ML service does not expose ML-core /health or /v1/capabilities."
-                    ],
-                )
-            raise MLCoreRetryableError(f"ML core capabilities probe failed: {exc}") from exc
+            raise MLCoreRetryableError(f"ML service handshake schema is incompatible: {exc}") from exc
 
     def _raise_http_error(self, response: httpx.Response) -> None:
         try:
@@ -224,3 +247,11 @@ class MLCorePipelineAdapter:
         if response.status_code in {400, 404, 415, 422}:
             raise MLCoreNonRetryableError(error.message)
         raise MLCoreRetryableError(error.message)
+
+
+def _normalize_async_error(error, default_message: str) -> ErrorInfo:
+    if error is None:
+        return ErrorInfo(code="processing_failed", message=default_message)
+    if isinstance(error, str):
+        return ErrorInfo(code="processing_failed", message=error)
+    return ErrorInfo(code=error.code, message=error.message)
