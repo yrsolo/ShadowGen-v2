@@ -18,6 +18,9 @@ from shadowgen_contracts import (
 from shadowgen_pipeline import PipelineArtifact, PipelineOutput
 
 
+ML_CORE_PIPELINE_VERSION = "ml-shadowgen-v1"
+
+
 def map_business_request_to_ml_core_request(
     request: RenderRequest,
     source_bytes: bytes,
@@ -26,7 +29,7 @@ def map_business_request_to_ml_core_request(
 ) -> MLCoreRenderRequest:
     return MLCoreRenderRequest(
         request_id=request_id,
-        pipeline_version=request.pipeline_version,
+        pipeline_version=ML_CORE_PIPELINE_VERSION,
         source=MLCoreSourcePayload(
             mime_type=source_mime_type,
             image_base64=base64.b64encode(source_bytes).decode("ascii"),
@@ -73,7 +76,13 @@ def map_ml_core_response_to_pipeline_output(response: MLCoreRenderResponse) -> P
 
 def map_ml_core_error_payload(payload: dict) -> ErrorInfo:
     error_payload = payload.get("error") or {}
+    details = error_payload.get("details")
+    if error_payload.get("request_id") and isinstance(details, dict):
+        details = {**details, "request_id": error_payload.get("request_id")}
+    elif error_payload.get("request_id"):
+        details = {"request_id": error_payload.get("request_id")}
     return ErrorInfo(
         code=error_payload.get("code", "processing_failed"),
         message=error_payload.get("message", "ML core request failed."),
+        details=details,
     )

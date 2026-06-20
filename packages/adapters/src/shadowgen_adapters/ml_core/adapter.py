@@ -244,9 +244,10 @@ class MLCorePipelineAdapter:
         except ValueError:
             payload = {"error": {"code": "processing_failed", "message": response.text}}
         error = map_ml_core_error_payload(payload)
+        message = _format_http_error(response, error)
         if response.status_code in {400, 404, 415, 422}:
-            raise MLCoreNonRetryableError(error.message)
-        raise MLCoreRetryableError(error.message)
+            raise MLCoreNonRetryableError(message)
+        raise MLCoreRetryableError(message)
 
 
 def _normalize_async_error(error, default_message: str) -> ErrorInfo:
@@ -254,4 +255,14 @@ def _normalize_async_error(error, default_message: str) -> ErrorInfo:
         return ErrorInfo(code="processing_failed", message=default_message)
     if isinstance(error, str):
         return ErrorInfo(code="processing_failed", message=error)
-    return ErrorInfo(code=error.code, message=error.message)
+    return ErrorInfo(code=error.code, message=error.message, details=error.details)
+
+
+def _format_http_error(response: httpx.Response, error: ErrorInfo) -> str:
+    request = response.request
+    endpoint = f"{request.method} {request.url.path}"
+    message = f"ML core {endpoint} returned HTTP {response.status_code} {error.code}: {error.message}"
+    if error.details:
+        detail_pairs = ", ".join(f"{key}={value}" for key, value in sorted(error.details.items()))
+        return f"{message} ({detail_pairs})"
+    return message

@@ -145,6 +145,8 @@ export interface SystemDiagnosticsResponse {
       ml_core_mode?: string | null;
       async_enabled?: boolean | null;
       capability_refresh_error?: string | null;
+      last_submit_error?: string | null;
+      last_poll_error?: string | null;
       transition_fallback_active?: boolean;
       in_flight_jobs?: Array<{
         business_job_id: string;

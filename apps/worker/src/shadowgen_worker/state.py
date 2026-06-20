@@ -123,7 +123,7 @@ class WorkerStateService:
             self._sync_runtime_metadata_locked(state)
             return self._persist_locked()
 
-    def job_failed(self, job_id: str, error_text: str) -> WorkerRuntimeState:
+    def job_failed(self, job_id: str, error_text: str, failure_stage: str | None = None) -> WorkerRuntimeState:
         with self._lock:
             state = self._ensure_state_loaded_locked()
             state.in_flight_jobs = [item for item in state.in_flight_jobs if item.business_job_id != job_id]
@@ -132,7 +132,10 @@ class WorkerStateService:
             state.current_job_id = state.in_flight_jobs[0].business_job_id if state.in_flight_jobs else None
             state.current_job_started_at = state.in_flight_jobs[0].submit_started_at if state.in_flight_jobs else None
             state.last_error = error_text
-            state.last_submit_error = error_text
+            if failure_stage == "ml_submit":
+                state.last_submit_error = error_text
+            elif failure_stage == "ml_poll":
+                state.last_poll_error = error_text
             state.updated_at = utc_now()
             self._sync_runtime_metadata_locked(state)
             return self._persist_locked()

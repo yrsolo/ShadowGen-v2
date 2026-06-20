@@ -134,5 +134,5 @@ class ProcessJobObserverPort(Protocol):
     def job_finished(self, job: JobRecord) -> None:
         ...
 
-    def job_failed(self, job_id: str, error_text: str) -> None:
+    def job_failed(self, job_id: str, error_text: str, failure_stage: str | None = None) -> None:
         ...

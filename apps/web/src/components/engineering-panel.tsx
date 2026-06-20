@@ -419,6 +419,16 @@ export function EngineeringPanel({
                     Last worker error: {diagnostics.worker.runtime_state.last_error}
                   </div>
                 ) : null}
+                {diagnostics.worker.runtime_state?.last_submit_error ? (
+                  <div className="error-box">
+                    Last ML submit error: {diagnostics.worker.runtime_state.last_submit_error}
+                  </div>
+                ) : null}
+                {diagnostics.worker.runtime_state?.last_poll_error ? (
+                  <div className="error-box">
+                    Last ML poll error: {diagnostics.worker.runtime_state.last_poll_error}
+                  </div>
+                ) : null}
               </div>
 
               <div className="stack">

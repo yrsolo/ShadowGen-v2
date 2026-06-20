@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from shadowgen_adapters.ml_core import MLCorePipelineAdapter
-from shadowgen_adapters.ml_core.errors import MLCoreRetryableError
+from shadowgen_adapters.ml_core.errors import MLCoreNonRetryableError, MLCoreRetryableError
 from shadowgen_contracts import RenderRequest, ShadowSettings
 from shadowgen_pipeline import PipelineContext
 
@@ -172,6 +172,7 @@ def test_ml_core_submit_maps_preprocess_and_async_poll(monkeypatch) -> None:
     assert captured["json"]["source"]["mime_type"] == "image/png"
     assert captured["json"]["source"]["image_base64"] == PNG_BASE64
     assert "data_base64" not in captured["json"]["source"]
+    assert captured["json"]["pipeline_version"] == "ml-shadowgen-v1"
     assert captured["json"]["shadow"]["model"] == "v2-diff"
     assert captured["json"]["request_id"] == "business-job-1"
     assert polled.status == "succeeded"
@@ -237,10 +238,65 @@ def test_ml_core_sync_service_uses_v1_render_for_diffusion(monkeypatch) -> None:
 
     assert submission.mode == "sync"
     assert captured["url"] == "http://ml-core:9001/v1/render"
+    assert captured["json"]["pipeline_version"] == "ml-shadowgen-v1"
     assert captured["json"]["shadow"]["model"] == "v2-diff"
     assert captured["json"]["request_id"] == "business-job-sync"
     assert submission.result is not None
     assert submission.result.metrics.shadow_ms == 400
+
+
+def test_ml_core_submit_error_includes_endpoint_status_and_code(monkeypatch) -> None:
+    def fake_get(url: str, *args, **kwargs):
+        if url.endswith("/health"):
+            return build_response(
+                "GET",
+                url,
+                {"status": "ok", "async_enabled": False, "accepting_jobs": True, "preferred_submit_mode": "sync"},
+            )
+        if url.endswith("/v1/capabilities"):
+            return build_response(
+                "GET",
+                url,
+                {
+                    "execution_default_backend": "local",
+                    "async_enabled": False,
+                    "supported_submit_modes": ["sync"],
+                    "preferred_submit_mode": "sync",
+                    "components": [],
+                },
+            )
+        raise AssertionError(url)
+
+    def fake_post(url: str, *args, **kwargs):
+        return build_response(
+            "POST",
+            url,
+            {
+                "error": {
+                    "code": "validation_error",
+                    "message": "pipeline_version must be ml-shadowgen-v1",
+                    "request_id": "business-job-sync",
+                }
+            },
+            status_code=422,
+        )
+
+    monkeypatch.setattr("shadowgen_adapters.ml_core.adapter.httpx.get", fake_get)
+    monkeypatch.setattr("shadowgen_adapters.ml_core.adapter.httpx.post", fake_post)
+    adapter = MLCorePipelineAdapter(base_url="http://ml-core:9001")
+
+    with pytest.raises(
+        MLCoreNonRetryableError,
+        match=r"ML core POST /v1/render returned HTTP 422 validation_error: pipeline_version must be ml-shadowgen-v1",
+    ):
+        adapter.submit(
+            PipelineContext(
+                request=RenderRequest(source_asset_id="asset-1", shadow=ShadowSettings(model="v2-diff")),
+                source_image=base64.b64decode(PNG_BASE64),
+                source_mime_type="image/png",
+                request_id="business-job-sync",
+            )
+        )
 
 
 def test_ml_core_probe_falls_back_to_legacy_sync(monkeypatch) -> None:

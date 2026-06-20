@@ -101,7 +101,7 @@ class ProcessJobUseCase:
             self._start_stage(job, "ml_submit", "Submitting render request to ML.")
             self.job_repository.update(job)
             submission = self.pipeline.submit(context)
-            self._finish_stage(job, "ml_submit", "succeeded", message=f"{submission.mode} / {submission.status}.")
+            self._finish_stage(job, "ml_submit", "succeeded", message=_submission_message(submission))
             in_flight = WorkerInFlightJob(
                 business_job_id=job.job_id,
                 mode=submission.mode,
@@ -144,7 +144,7 @@ class ProcessJobUseCase:
                 if poll_result.status in {"queued", "running", "submitted", "processing"}:
                     if poll_result.error is not None:
                         if not poll_result.retryable or poll_retries >= self.max_retries:
-                            raise RuntimeError(poll_result.error.message)
+                            raise RuntimeError(_poll_error_message(submission, poll_result))
                         poll_retries += 1
                     time.sleep(self.poll_interval_ms / 1000.0)
                     continue
@@ -153,9 +153,10 @@ class ProcessJobUseCase:
                     code="processing_failed",
                     message=f"ML core job returned terminal status '{poll_result.status}'.",
                 )
-                raise RuntimeError(error.message)
+                raise RuntimeError(_poll_error_message(submission, poll_result, error))
         except Exception as exc:
             self._fail_running_stage(job, str(exc))
+            failure_stage = _last_failed_stage_name(job)
             domain_job = _to_domain_job(job)
             if not domain_job.is_terminal:
                 domain_job.fail(utc_now())
@@ -163,7 +164,7 @@ class ProcessJobUseCase:
             job.error = ErrorInfo(code="processing_failed", message=str(exc))
             self._record_stage(job, "failed", "failed", message="Job processing failed.", error=str(exc))
             self.job_repository.update(job)
-            self._emit_job_failed(job.job_id, str(exc))
+            self._emit_job_failed(job.job_id, str(exc), failure_stage)
             raise
 
     def _complete_job(self, job: JobRecord, pipeline_output) -> JobRecord:
@@ -279,9 +280,9 @@ class ProcessJobUseCase:
         if self.observer is not None:
             self.observer.job_finished(job.model_copy(deep=True))
 
-    def _emit_job_failed(self, job_id: str, error_text: str) -> None:
+    def _emit_job_failed(self, job_id: str, error_text: str, failure_stage: str | None) -> None:
         if self.observer is not None:
-            self.observer.job_failed(job_id, error_text)
+            self.observer.job_failed(job_id, error_text, failure_stage)
 
 
 def _parse_optional_datetime(value: str | None) -> datetime | None:
@@ -294,6 +295,37 @@ def _coerce_optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _last_failed_stage_name(job: JobRecord) -> str | None:
+    for stage in reversed(job.trace):
+        if stage.status == "failed":
+            return stage.name
+    return None
+
+
+def _submission_message(submission) -> str:
+    parts = [f"{submission.mode} / {submission.status}"]
+    if submission.core_job_id:
+        parts.append(f"ml_job_id={submission.core_job_id}")
+    if submission.request_id:
+        parts.append(f"request_id={submission.request_id}")
+    return "; ".join(parts) + "."
+
+
+def _poll_error_message(submission, poll_result, error: ErrorInfo | None = None) -> str:
+    payload_error = error or poll_result.error
+    parts = [f"ML poll returned status '{poll_result.status}'"]
+    if submission.core_job_id:
+        parts.append(f"ml_job_id={submission.core_job_id}")
+    if submission.request_id:
+        parts.append(f"request_id={submission.request_id}")
+    if payload_error is not None:
+        parts.append(f"{payload_error.code}: {payload_error.message}")
+        if payload_error.details:
+            details = ", ".join(f"{key}={value}" for key, value in sorted(payload_error.details.items()))
+            parts.append(f"details=({details})")
+    return "; ".join(parts)
 
 
 def _to_domain_job(job: JobRecord) -> JobEntity:
