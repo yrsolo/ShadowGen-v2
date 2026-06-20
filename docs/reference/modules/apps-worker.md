@@ -51,6 +51,9 @@ Runtime note:
 - `diagnostic_probe` checks the worker action round-trip and probes the effective ML URL from the worker side, using the ML-core health path or legacy `/test` compatibility path
 - service detection is contract-based: a valid ML-core handshake selects sync/async `/v1/render*`; legacy mode requires a 2xx `/test` and uses `/v1/process`
 - new ML-service async statuses `pending`, `running`, `completed`, `failed`, and `cancelled` are mapped into the business job lifecycle
+- ML HTTP failures are recorded with method, endpoint path, HTTP status, ML error code, and message in the failing job trace stage
+- async ML terminal errors are recorded on the `ml_poll` trace stage with ML job id, request id, status, error code, and details when provided
+- worker runtime state separates last submit and poll errors so diagnostics can show whether the failure happened while submitting to ML or while waiting for async completion
 - the worker container is self-contained: code is baked into the image and runtime does not bind-mount the host repository or Docker socket
 - `scripts/run-worker-cloud-container.cmd` starts the always-on Docker worker detached with `--restart unless-stopped`
 - container self-management is intentionally disabled in the supported container script, so the local UI disables git update/rebuild controls

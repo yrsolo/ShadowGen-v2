@@ -206,8 +206,9 @@ Purpose:
 #### `pipeline_version`
 
 - required string
-- identifies the expected ML behavior family
-- allows the worker to request a specific generation pipeline
+- identifies the ML-core request contract version
+- must not be used for choosing between GAN and diffusion model families
+- model-family selection is carried by `shadow.model`
 
 Initial recommendation:
 

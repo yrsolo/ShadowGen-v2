@@ -11,6 +11,37 @@
 - `shadow.model` is forwarded unchanged, including `v2-diff`
 - ML stage metrics are preserved in job results and shown in expanded Engineering diagnostics
 
+## 2026-06-20 ML-Core Pipeline Version Hotfix
+
+- worker-to-ML-core mapping now always sends `pipeline_version="ml-shadowgen-v1"` to the new ML service
+- `shadow.model` remains the only model-family selector for `v1-gan` / `v2-diff`
+- the public job DTO's legacy pipeline field is no longer forwarded into the ML-core request contract
+- docs now state that `pipeline_version` identifies the ML-core transport contract, not the GAN/diffusion family
+
+## 2026-06-20 ML-Core Pipeline Version Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_ml_core_adapter.py tests\unit\test_legacy_http_adapter.py -q -p no:cacheprovider` -> `10 passed`
+
+## 2026-06-20 Worker/ML Diagnostics Tightening
+
+- live `http://192.168.1.8:9001/health` returned `status=ok`, `async_enabled=true`, `accepting_jobs=true`
+- live `http://192.168.1.8:9001/v1/capabilities` returned the new service shape with `preferred_submit_mode=async`, `degraded=false`, and `shadow_generator` model variant `v2-diff`
+- live `http://192.168.1.8:9001/test` returned `404`, which confirms this endpoint must be treated as new ML-core rather than legacy
+- direct async submit with `pipeline_version=ml-shadowgen-v1` was accepted and returned `status=pending`, proving the current ML service accepts the corrected worker contract
+- the direct tiny-image smoke then returned async `status=failed` with ML error text, so worker diagnostics now preserve async terminal errors on the `ml_poll` stage
+- ML submit HTTP failures now include endpoint method/path, HTTP status, ML error code, and message
+- process-job observer now classifies failures by the actual failed trace stage, so worker state separates `last_submit_error` and `last_poll_error`
+- web Engineering diagnostics now renders `Last ML submit error` and `Last ML poll error`
+
+## 2026-06-20 Worker/ML Diagnostics Checks
+
+- `.\.venv\Scripts\python.exe -m pytest tests\unit\test_ml_core_adapter.py tests\unit\test_process_job_failures.py tests\unit\test_worker_state_service.py tests\unit\test_worker_control_app.py -q -p no:cacheprovider` -> `16 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- first full `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider` hit `PermissionError` creating pytest temp data under `C:\Users\solofarm\AppData\Local\Temp\pytest-of-solofarm`
+- rerun full pytest with `TEMP` and `TMP` pointed at a workspace-local `.tmp` directory -> `48 passed, 1 skipped`
+- `powershell -ExecutionPolicy Bypass -File scripts\docs-check.ps1` -> passed
+- `git diff --check` -> passed
+
 ## 2026-06-19 New ML Service Checks
 
 - `.\.venv\Scripts\python.exe -m pytest tests/unit/test_ml_core_adapter.py tests/unit/test_legacy_http_adapter.py tests/unit/test_process_job_failures.py tests/smoke/test_worker_process_job.py -q -p no:cacheprovider` -> `13 passed`

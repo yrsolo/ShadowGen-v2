@@ -19,7 +19,9 @@ The new system should depend on a stable processing interface, not on direct imp
 - `LegacyHttpAdapter` is selected only when ML-core handshake is unavailable and `/test` returns 2xx
 - `MLCoreStubAdapter` provides deterministic local behavior when no remote URL is configured
 
-The adapter forwards `shadow.model` unchanged, including `v1-gan` and `v2-diff`. For async calls it uses the durable business job id as `request_id`, matching ML-service idempotency semantics.
+The adapter forwards `shadow.model` unchanged, including `v1-gan` and `v2-diff`. It always sends the ML-core contract version `pipeline_version="ml-shadowgen-v1"` to the new service; the public job DTO's legacy pipeline field is not used to select the ML-core transport contract. For async calls it uses the durable business job id as `request_id`, matching ML-service idempotency semantics.
+
+Diagnostics stay on the worker side. Submit failures record the ML HTTP method, endpoint, status, error code, and message on the `ml_submit` stage. Async terminal failures record ML job id, request id, status, and error payload on the `ml_poll` stage. The public API reads these persisted traces from shared state instead of probing the private ML service directly.
 
 ## Evolution Path
 
