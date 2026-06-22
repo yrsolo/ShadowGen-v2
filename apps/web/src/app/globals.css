@@ -403,6 +403,10 @@ a {
   gap: 12px;
 }
 
+.single-action-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button,
@@ -567,6 +571,26 @@ a {
   color: #ffd0d0;
   border-radius: 14px;
   padding: 12px 14px;
+}
+
+.mutation-status {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.mutation-status.success {
+  border-color: rgba(83, 216, 106, 0.35);
+  background: rgba(83, 216, 106, 0.1);
+  color: #cffff0;
+}
+
+.mutation-status.error {
+  border-color: rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.12);
+  color: #ffd0d0;
 }
 
 .engineering-grid {

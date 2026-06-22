@@ -22,6 +22,17 @@ class InMemoryJobRepository:
         if job.request_cache_key and self._request_cache_index.get(job.request_cache_key) == job.job_id:
             self._request_cache_index.pop(job.request_cache_key, None)
 
+    def clear_request_cache(self) -> int:
+        cleared = len(self._request_cache_index)
+        for job in self._storage.values():
+            if job.request_cache_key:
+                cleared += 1
+                job.request_cache_key = None
+                job.cache_status = None
+                job.reused_existing_job = False
+        self._request_cache_index.clear()
+        return cleared
+
     def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         indexed_job_id = self._request_cache_index.get(cache_key)
         if indexed_job_id is not None:

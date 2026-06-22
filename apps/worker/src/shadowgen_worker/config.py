@@ -22,6 +22,8 @@ class WorkerConfig(BaseSettings):
     s3_prefix: str = "shadowgen-v2"
     queue_backend: str = "file"
     queue_poll_wait_sec: int = 2
+    queue_visibility_timeout_sec: int = 120
+    queue_visibility_extend_interval_sec: int = 30
     ymq_endpoint: str | None = None
     ymq_queue_url: str | None = None
     ymq_region: str = "ru-central1"

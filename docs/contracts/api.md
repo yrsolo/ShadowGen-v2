@@ -34,6 +34,12 @@ Operator action for stale/lost job cleanup. Requires `X-Admin-Token`.
 
 The endpoint deletes job metadata and the request-cache index entry when it points at the deleted job.
 
+### `POST /v1/jobs/cache/clear`
+
+Operator action for cache cleanup. Requires `X-Admin-Token`.
+
+The endpoint clears request-cache metadata and cache index entries so future submissions create fresh jobs. It does not delete job records, result artifacts, or source assets.
+
 ### `GET /v1/system/diagnostics`
 
 Engineering-safe diagnostics for storage backend, queue/backend state, worker heartbeat, and recent jobs.

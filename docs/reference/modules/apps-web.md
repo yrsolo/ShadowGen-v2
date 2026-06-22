@@ -34,6 +34,9 @@ Current interaction notes:
 - `Max` keeps the larger desktop-oriented workspace and the previous manual controls
 - `Engineering` keeps the current diagnostics and remote worker-control view
 - mutating Engineering actions require the operator to enter the API admin token; the token is not baked into the public web build
+- lost-job cleanup actions show inline per-job status and API errors, including missing or invalid admin token responses
+- after a successful lost-job `Mark failed` or `Delete metadata` action, the card is hidden immediately while diagnostics refreshes from shared state
+- Engineering includes a `Clear request cache` admin action that resets duplicate-request cache metadata without deleting jobs or artifacts
 
 Not responsible for:
 

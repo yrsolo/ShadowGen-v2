@@ -6,7 +6,7 @@ from shadowgen_application.use_cases.create_job import CreateJobUseCase
 from shadowgen_application.use_cases.get_job import GetJobUseCase
 from shadowgen_application.use_cases.get_job_result import GetJobResultUseCase
 from shadowgen_application.use_cases.manage_job import ManageJobUseCase
-from shadowgen_contracts import CreateJobRequest, CreateJobResponse, GetJobResponse, GetJobResultResponse, JobMutationResponse, MarkJobFailedRequest
+from shadowgen_contracts import ClearJobCacheResponse, CreateJobRequest, CreateJobResponse, GetJobResponse, GetJobResultResponse, JobMutationResponse, MarkJobFailedRequest
 from shadowgen_domain import AssetNotFoundError, JobNotFoundError
 
 from shadowgen_api.deps import (
@@ -57,6 +57,15 @@ def get_job_result(job_id: str, use_case: GetJobResultUseCase = Depends(get_get_
         return GetJobResultResponse(job_id=job.job_id, status=job.status, result=job.result)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/cache/clear", response_model=ClearJobCacheResponse)
+def clear_job_cache(
+    _admin: None = Depends(require_admin_token),
+    use_case: ManageJobUseCase = Depends(get_manage_job_use_case),
+) -> ClearJobCacheResponse:
+    cleared_entries = use_case.clear_request_cache()
+    return ClearJobCacheResponse(cleared_entries=cleared_entries)
 
 
 @router.post("/{job_id}/mark-failed", response_model=JobMutationResponse)

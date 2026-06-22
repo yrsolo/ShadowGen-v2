@@ -75,6 +75,8 @@ def build_worker_runtime(config: WorkerConfig):
         state_service=state_service,
         poll_interval_sec=config.poll_interval_sec,
         max_in_flight_jobs=config.max_in_flight_jobs,
+        queue_visibility_timeout_sec=config.queue_visibility_timeout_sec,
+        queue_visibility_extend_interval_sec=config.queue_visibility_extend_interval_sec,
     )
     action_executor = WorkerActionExecutor(
         config=config,

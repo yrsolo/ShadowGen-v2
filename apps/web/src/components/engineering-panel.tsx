@@ -14,7 +14,13 @@ interface EngineeringPanelProps {
   onTriggerWorkerAction: (action: WorkerControlAction, adminToken: string) => Promise<void>;
   onMarkJobFailed: (jobId: string, reason: string, adminToken: string) => Promise<void>;
   onDeleteJob: (jobId: string, adminToken: string) => Promise<void>;
+  onClearJobCache: (adminToken: string) => Promise<{ cleared_entries: number } | void>;
 }
+
+type MutationMessage = {
+  text: string;
+  tone: "pending" | "success" | "error";
+};
 
 function formatDateTime(value?: string | null): string {
   if (!value) {
@@ -186,13 +192,18 @@ export function EngineeringPanel({
   onSaveRuntimeConfig,
   onTriggerWorkerAction,
   onMarkJobFailed,
-  onDeleteJob
+  onDeleteJob,
+  onClearJobCache
 }: EngineeringPanelProps) {
   const [legacyUrl, setLegacyUrl] = useState(runtimeConfig?.legacy_ml_base_url ?? "");
   const [adminToken, setAdminToken] = useState("");
   const [saving, setSaving] = useState(false);
   const [acting, setActing] = useState<WorkerControlAction | null>(null);
   const [mutatingJobId, setMutatingJobId] = useState<string | null>(null);
+  const [mutationMessageByJobId, setMutationMessageByJobId] = useState<Record<string, MutationMessage>>({});
+  const [hiddenLostJobIds, setHiddenLostJobIds] = useState<Set<string>>(new Set());
+  const [cacheMutationMessage, setCacheMutationMessage] = useState<MutationMessage | null>(null);
+  const [clearingCache, setClearingCache] = useState(false);
 
   useEffect(() => {
     setLegacyUrl(runtimeConfig?.legacy_ml_base_url ?? "");
@@ -219,29 +230,115 @@ export function EngineeringPanel({
   }
 
   async function handleMarkFailed(item: LostJobDiagnostic) {
+    if (!adminToken.trim()) {
+      setMutationMessageByJobId((current) => ({
+        ...current,
+        [item.job.job_id]: {
+          text: "Admin token is required for cleanup actions.",
+          tone: "error"
+        }
+      }));
+      return;
+    }
     setMutatingJobId(item.job.job_id);
+    setMutationMessageByJobId((current) => ({
+      ...current,
+      [item.job.job_id]: { text: "Marking failed...", tone: "pending" }
+    }));
     try {
       await onMarkJobFailed(
         item.job.job_id,
         `Marked failed from engineering diagnostics. ${item.reason}`,
         adminToken
       );
+      setHiddenLostJobIds((current) => new Set([...current, item.job.job_id]));
+      setMutationMessageByJobId((current) => ({
+        ...current,
+        [item.job.job_id]: { text: "Marked failed.", tone: "success" }
+      }));
+    } catch (cause) {
+      setMutationMessageByJobId((current) => ({
+        ...current,
+        [item.job.job_id]: {
+          text: cause instanceof Error ? cause.message : "Failed to mark job failed.",
+          tone: "error"
+        }
+      }));
     } finally {
       setMutatingJobId(null);
     }
   }
 
   async function handleDelete(item: LostJobDiagnostic) {
+    if (!adminToken.trim()) {
+      setMutationMessageByJobId((current) => ({
+        ...current,
+        [item.job.job_id]: {
+          text: "Admin token is required for cleanup actions.",
+          tone: "error"
+        }
+      }));
+      return;
+    }
     if (!window.confirm(`Delete metadata for job ${item.job.job_id}? This cannot be undone.`)) {
       return;
     }
     setMutatingJobId(item.job.job_id);
+    setMutationMessageByJobId((current) => ({
+      ...current,
+      [item.job.job_id]: { text: "Deleting metadata...", tone: "pending" }
+    }));
     try {
       await onDeleteJob(item.job.job_id, adminToken);
+      setHiddenLostJobIds((current) => new Set([...current, item.job.job_id]));
+      setMutationMessageByJobId((current) => ({
+        ...current,
+        [item.job.job_id]: { text: "Deleted metadata.", tone: "success" }
+      }));
+    } catch (cause) {
+      setMutationMessageByJobId((current) => ({
+        ...current,
+        [item.job.job_id]: {
+          text: cause instanceof Error ? cause.message : "Failed to delete job metadata.",
+          tone: "error"
+        }
+      }));
     } finally {
       setMutatingJobId(null);
     }
   }
+
+  async function handleClearCache() {
+    if (!adminToken.trim()) {
+      setCacheMutationMessage({
+        text: "Admin token is required for cache cleanup.",
+        tone: "error"
+      });
+      return;
+    }
+    if (!window.confirm("Clear request cache indexes? Jobs and artifacts will stay in storage.")) {
+      return;
+    }
+    setClearingCache(true);
+    setCacheMutationMessage({ text: "Clearing request cache...", tone: "pending" });
+    try {
+      const result = await onClearJobCache(adminToken);
+      const clearedEntries = result?.cleared_entries ?? 0;
+      setCacheMutationMessage({
+        text: `Cleared ${clearedEntries} request-cache entries.`,
+        tone: "success"
+      });
+    } catch (cause) {
+      setCacheMutationMessage({
+        text: cause instanceof Error ? cause.message : "Failed to clear request cache.",
+        tone: "error"
+      });
+    } finally {
+      setClearingCache(false);
+    }
+  }
+
+  const visibleLostJobs = diagnostics?.lost_jobs.filter((item) => !hiddenLostJobIds.has(item.job.job_id)) ?? [];
 
   return (
     <section className="panel stack">
@@ -298,6 +395,16 @@ export function EngineeringPanel({
                 {acting === "clear_runtime_override" ? "Queueing..." : "Clear override"}
               </button>
             </div>
+            <div className="button-row single-action-row">
+              <button className="ghost-button danger-button" type="button" onClick={handleClearCache} disabled={clearingCache}>
+                {clearingCache ? "Clearing cache..." : "Clear request cache"}
+              </button>
+            </div>
+            {cacheMutationMessage ? (
+              <div className={`mutation-status ${cacheMutationMessage.tone}`}>
+                {cacheMutationMessage.text}
+              </div>
+            ) : null}
           </div>
 
           {!diagnostics ? <p className="muted">No diagnostics loaded yet.</p> : (
@@ -323,18 +430,24 @@ export function EngineeringPanel({
           {!diagnostics ? null : (
             <div className="panel engineering-subpanel stack">
               <div className="stack">
-                {diagnostics.lost_jobs.length ? (
+                {visibleLostJobs.length ? (
                   <>
                     <strong>Lost jobs</strong>
                     <div className="diagnostic-job-list">
-                      {diagnostics.lost_jobs.map((item) => (
-                        <LostJobCard
-                          key={item.job.job_id}
-                          item={item}
-                          busy={mutatingJobId === item.job.job_id}
-                          onMarkFailed={handleMarkFailed}
-                          onDelete={handleDelete}
-                        />
+                      {visibleLostJobs.map((item) => (
+                        <div className="stack" key={item.job.job_id}>
+                          <LostJobCard
+                            item={item}
+                            busy={mutatingJobId === item.job.job_id}
+                            onMarkFailed={handleMarkFailed}
+                            onDelete={handleDelete}
+                          />
+                          {mutationMessageByJobId[item.job.job_id] ? (
+                            <div className={`mutation-status ${mutationMessageByJobId[item.job.job_id].tone}`}>
+                              {mutationMessageByJobId[item.job.job_id].text}
+                            </div>
+                          ) : null}
+                        </div>
                       ))}
                     </div>
                   </>
@@ -375,12 +488,12 @@ export function EngineeringPanel({
                 <strong>Worker</strong>
                 {(() => {
                   const stale = diagnostics.worker.heartbeat_is_stale ?? true;
-                  const error = diagnostics.worker.runtime_state?.status === "error";
-                  const alive = !stale && !error;
+                  const workerProbeFailed = diagnostics.worker.runtime_state?.last_worker_probe?.ok === false;
+                  const alive = !stale && !workerProbeFailed;
                   return (
                     <div className={`worker-life ${alive ? "ok" : "bad"}`}>
                       <span className="worker-life-dot" />
-                      <strong>{alive ? "Worker fresh" : "Worker stale/error"}</strong>
+                      <strong>{alive ? "Worker fresh" : "Worker stale/probe failed"}</strong>
                       <span>{diagnostics.worker.runtime_state?.updated_at ? formatDateTime(diagnostics.worker.runtime_state.updated_at) : "no heartbeat"}</span>
                     </div>
                   );
@@ -416,7 +529,7 @@ export function EngineeringPanel({
                 ) : null}
                 {diagnostics.worker.runtime_state?.last_error ? (
                   <div className="error-box">
-                    Last worker error: {diagnostics.worker.runtime_state.last_error}
+                    Last job error: {diagnostics.worker.runtime_state.last_error}
                   </div>
                 ) : null}
                 {diagnostics.worker.runtime_state?.last_submit_error ? (

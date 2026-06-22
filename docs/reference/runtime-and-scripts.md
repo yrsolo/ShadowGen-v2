@@ -19,6 +19,8 @@ Important keys:
   - `YMQ_ENDPOINT`
   - `YMQ_QUEUE_URL`
   - `YMQ_REGION`
+  - `QUEUE_VISIBILITY_TIMEOUT_SEC`
+  - `QUEUE_VISIBILITY_EXTEND_INTERVAL_SEC`
 - ML:
   - `LEGACY_ML_BASE_URL`
   - `LEGACY_ML_HOST_IP_OVERRIDE`
@@ -77,6 +79,7 @@ The active wiring is built in:
 - `apps/web` and `apps/api` are the public cloud-facing services
 - `apps/worker` remains local and owns business-job orchestration
 - the worker discovers ML-core sync/async capabilities at runtime
+- the worker extends queue visibility while an async ML job is running; keep `QUEUE_VISIBILITY_TIMEOUT_SEC` comfortably above the extension interval
 - `LEGACY_ML_BASE_URL` remains the effective worker-side ML target variable for now, even when the endpoint is actually the new ML core
 - `LEGACY_ML_HOST_IP_OVERRIDE` can force Docker `--add-host` mapping when the ML URL uses a hostname that the container cannot resolve
 - `scripts/run-worker-cloud-container.cmd` is the single worker container mode: it builds the worker image, injects git metadata as build args, starts `shadowgen-worker` detached with `--restart unless-stopped`, and runs without mounting the repository or Docker socket

@@ -43,6 +43,8 @@ Runtime note:
 - the default idle heartbeat interval is 30 seconds; diagnostics mark worker state stale only after five minutes without a fresh heartbeat/probe
 - worker/core integration now uses a `probe -> submit -> poll -> cancel` boundary instead of a single blocking `render()` call
 - queue messages are acknowledged only after worker handling completes; failed handling is nacked so the queue can redeliver
+- the worker extends queue visibility for active deliveries, so long async ML polling does not redeliver the same business job before processing finishes
+- duplicate delivery of a job id already active in the same worker updates the active receipt handle instead of starting a second executor
 - sync mode remains the compatibility fallback, while async mode is the preferred path when the ML core reports `async_enabled=true`
 - worker-side concurrency is job-level only; tensor batching stays inside the ML core and Triton layer
 - a runtime ML override in shared runtime config has priority over `LEGACY_ML_BASE_URL`; clear it before relying on a changed worker env value
@@ -54,6 +56,7 @@ Runtime note:
 - ML HTTP failures are recorded with method, endpoint path, HTTP status, ML error code, and message in the failing job trace stage
 - async ML terminal errors are recorded on the `ml_poll` trace stage with ML job id, request id, status, error code, and details when provided
 - worker runtime state separates last submit and poll errors so diagnostics can show whether the failure happened while submitting to ML or while waiting for async completion
+- worker heartbeat/life means the worker process is updating state; the last job or ML error is shown separately and does not by itself mean the worker is dead
 - the worker container is self-contained: code is baked into the image and runtime does not bind-mount the host repository or Docker socket
 - `scripts/run-worker-cloud-container.cmd` starts the always-on Docker worker detached with `--restart unless-stopped`
 - container self-management is intentionally disabled in the supported container script, so the local UI disables git update/rebuild controls

@@ -246,3 +246,7 @@ export interface JobMutationResponse {
   status?: JobStatus | null;
   deleted: boolean;
 }
+
+export interface ClearJobCacheResponse {
+  cleared_entries: number;
+}

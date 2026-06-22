@@ -75,7 +75,12 @@ class JobMutationResponse(BaseModel):
     deleted: bool = False
 
 
+class ClearJobCacheResponse(BaseModel):
+    cleared_entries: int
+
+
 __all__ = [
+    "ClearJobCacheResponse",
     "CreateJobRequest",
     "CreateJobResponse",
     "GetJobResponse",

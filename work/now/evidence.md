@@ -1,5 +1,52 @@
 # Evidence
 
+## 2026-06-20 Lost Job Cleanup UI Fix
+
+- live `DELETE https://api.shadowgen.solofarm.ru/v1/jobs/bf1d86cd-3d11-4e2e-984d-82923566ce32` without `X-Admin-Token` returned `401 Invalid admin token`, proving the public API route is reachable and admin-protected
+- live CORS preflight for `DELETE /v1/jobs/{job_id}` from `https://shadowgen.solofarm.ru` returned allowed method/header values
+- web API client now includes FastAPI `detail` text in thrown errors, so cleanup failures show `401: Invalid admin token` instead of a bare status code
+- page-level operator callbacks now rethrow mutation failures after setting the global error, allowing Engineering panel to render per-job failure text
+- Engineering lost-job cards now validate that an admin token is present before marking/deleting
+- Engineering lost-job cards now show inline pending/success/error status per job
+- successfully marked/deleted lost-job cards are hidden immediately while diagnostics refreshes
+
+## 2026-06-20 Lost Job Cleanup UI Checks And Deployment
+
+- `.\.venv\Scripts\python.exe -m pytest tests\integration\test_api_jobs.py tests\integration\test_system_diagnostics_failures.py -q -p no:cacheprovider` -> `7 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260620-1 .` -> passed
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260620-1` -> pushed digest `sha256:a4ee03b45ec0e04339aed33e58f03f0c6227dd70491770fdb5d66fda3b9d9057`
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260620-1 ...` -> active revision `bbanh6qrk6qfv0pm6egn`
+- `curl.exe -I https://shadowgen.solofarm.ru` -> HTTP `200`
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` -> `{"status":"ok"}`
+- live diagnostics after deploy still showed three lost jobs, which is expected until the operator retries cleanup with a valid admin token
+
+## 2026-06-20 Request Cache Clear Button
+
+- added admin-protected `POST /v1/jobs/cache/clear`
+- request-cache clearing removes cache keys from job metadata and deletes cache index entries without deleting jobs, source assets, or result artifacts
+- memory, file, and S3 job repositories now implement `clear_request_cache()`
+- Engineering panel now includes `Clear request cache` with admin-token validation, confirmation, and inline status/error feedback
+- web API client parses FastAPI error details for cache cleanup just like other operator mutations
+
+## 2026-06-20 Request Cache Clear Checks And Deployment
+
+- `.\.venv\Scripts\python.exe -m pytest tests\integration\test_api_jobs.py tests\unit\test_s3_runtime_adapters.py -q -p no:cacheprovider` -> `7 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `docker build -f apps/api/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260620-2 .` -> passed
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260620-2 .` -> passed
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260620-2` -> pushed digest `sha256:0f21506477c5b3b6b7da832a59db0261649646737122cad3ba513447069677e7`
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260620-2` -> pushed digest `sha256:79a85889bcca94d1aeb785a10ae0931cfe2d9c4a253b7b6cd190e16276f4a302`
+- `yc serverless container revision deploy --container-name shadowgen-api --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260620-2 ...` -> active revision `bba467i99b4ph5e6rrh7`
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260620-2 ...` -> active revision `bbaiihrmaml52aanpsst`
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` -> `{"status":"ok"}`
+- `curl.exe -I https://shadowgen.solofarm.ru` -> HTTP `200`
+- `POST https://api.shadowgen.solofarm.ru/v1/jobs/cache/clear` without admin token -> `401 Invalid admin token`
+- CORS preflight for `POST /v1/jobs/cache/clear` from `https://shadowgen.solofarm.ru` allowed `x-admin-token`
+- full `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider` with workspace-local temp -> `50 passed, 1 skipped`
+- `powershell -ExecutionPolicy Bypass -File scripts\docs-check.ps1` -> passed
+- `git diff --check` -> passed
+
 ## 2026-06-19 New ML Service Auto-Detection
 
 - worker capability DTOs now accept the current ML-service handshake fields, including `supported_submit_modes`, `preferred_submit_mode`, `degraded`, and `backends[*].backend_kind`
@@ -448,3 +495,24 @@
 - live legacy server integration remains environment-dependent and was not exercised in these checks
 - container self-update/recreate is an MVP path for the home-server phase and relies on Docker socket + workspace mount conventions remaining stable
 - the self-managed worker mode still relies on Docker socket and repository mounts, so it should remain opt-in rather than the default Docker Desktop path
+
+## 2026-06-23 Worker Liveness And Queue Lease Fix
+
+Observed production diagnostics showed a running async job stuck at `ml_poll: running`, repeated `worker_claimed` trace entries, and worker state error `Cannot start job ... from state 'running'; expected 'queued'`. This pointed to YMQ redelivering the same business job while the first worker execution was still waiting for async ML completion.
+
+Updated behavior:
+
+- worker loop extends queue visibility for active deliveries
+- duplicate delivery of a locally active job id replaces the active receipt handle instead of starting a second executor
+- job failures no longer set worker runtime `status=error`; heartbeat/life now represents worker process freshness, while `last_error`, `last_submit_error`, and `last_poll_error` represent job/ML failures
+- local worker UI and web engineering panel now label stale worker state as `stale/probe failed` instead of mixing worker liveness with the last job error
+- `.env*` examples document `QUEUE_VISIBILITY_TIMEOUT_SEC` and `QUEUE_VISIBILITY_EXTEND_INTERVAL_SEC`
+- worker/runtime docs describe queue lease extension and the separation between worker heartbeat and ML/job errors
+
+Checks:
+
+- `python -m pytest tests\unit\test_worker_loop_resilience.py -q` -> `3 passed`
+- `python -m pytest tests\integration\test_api_jobs.py tests\integration\test_system_diagnostics_failures.py tests\unit\test_s3_runtime_adapters.py -q` -> `10 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `python -m pytest -q` -> `52 passed, 1 skipped`
+- `powershell -ExecutionPolicy Bypass -File scripts\docs-check.ps1` -> passed

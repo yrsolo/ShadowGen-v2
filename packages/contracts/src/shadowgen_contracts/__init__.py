@@ -4,6 +4,7 @@ from .diagnostics import LostJobDiagnostic, QueueDiagnostics, StorageDiagnostics
 from .enums import AssetKind, BackgroundMode, JobStatus, OutputFormat
 from .errors import ErrorInfo, ErrorResponse
 from .jobs import (
+    ClearJobCacheResponse,
     CreateJobRequest,
     CreateJobResponse,
     GetJobResponse,
@@ -56,6 +57,7 @@ __all__ = [
     "AssetRef",
     "BackgroundMode",
     "BackgroundSpec",
+    "ClearJobCacheResponse",
     "CreateAssetResponse",
     "CreateJobRequest",
     "CreateJobResponse",

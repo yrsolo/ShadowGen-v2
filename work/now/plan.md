@@ -2,14 +2,17 @@
 
 ## Steps
 
-1. Probe `http://192.168.1.8:9001` for `/health`, `/v1/capabilities`, and legacy fallback signals when reachable.
-2. Inspect worker processing trace around ML probe, submit, poll, result mapping, and artifact storage.
-3. Preserve compact ML failure context in job trace and worker diagnostics without logging image payloads.
-4. Add tests that failed ML submit/poll responses leave actionable trace messages.
-5. Update docs/evidence with the diagnostic path and checks.
+1. Inspect worker loop, queue delivery adapters, and current diagnostics semantics.
+2. Add visibility lease extension for in-flight queue deliveries.
+3. Ignore/merge duplicate delivery of a job id already active in the local worker.
+4. Change worker state so job failures do not mean the worker process is stale/dead.
+5. Update web and local worker UI labels to separate worker life from last job/ML error.
+6. Add focused tests for failed jobs, duplicate delivery, and visibility extension.
 
 ## Checks
 
-- `python -m pytest tests/unit/test_ml_core_adapter.py tests/unit/test_process_job_failures.py`
-- `python -m pytest tests/unit/test_worker_state_service.py tests/unit/test_worker_control_app.py`
+- `python -m pytest tests/unit/test_worker_loop_resilience.py`
+- `python -m pytest tests/integration/test_api_jobs.py tests/integration/test_system_diagnostics_failures.py`
+- `python -m pytest tests/unit/test_s3_runtime_adapters.py`
+- `cmd /c npm run build` in `apps/web`
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`

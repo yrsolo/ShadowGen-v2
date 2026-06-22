@@ -66,6 +66,7 @@ Operator cleanup endpoints:
 
 - `POST /v1/jobs/{job_id}/mark-failed` records the job as failed with an operator reason.
 - `DELETE /v1/jobs/{job_id}` removes the job metadata and its request-cache index entry when it points at that job.
+- `POST /v1/jobs/cache/clear` removes request-cache keys from job metadata and deletes cache index entries without deleting jobs or artifacts.
 
 ## Duplicate Request Reuse
 

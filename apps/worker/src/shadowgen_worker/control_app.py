@@ -250,7 +250,9 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
         capability_notes = payload["worker"].get("capabilities", {}).get("notes", []) if payload["worker"].get("capabilities") else []
         last_worker_probe = payload["worker"].get("last_worker_probe")
         last_ml_probe = payload["worker"].get("last_ml_probe")
-        life_ok = payload["heartbeat_age_sec"] is not None and payload["heartbeat_age_sec"] <= 300 and payload["worker"].get("status") != "error"
+        last_worker_probe = payload["worker"].get("last_worker_probe") or {}
+        worker_probe_failed = last_worker_probe.get("ok") is False
+        life_ok = payload["heartbeat_age_sec"] is not None and payload["heartbeat_age_sec"] <= 300 and not worker_probe_failed
         life_class = "life-ok" if life_ok else "life-bad"
         capability_footer = ""
         if payload["worker"].get("capability_refresh_error"):
@@ -328,7 +330,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
           <h2 class="section-title">Runtime</h2>
           <div class="kv">
             <div><span class="muted">Status</span><strong>{escape(payload["worker"]["status"])}</strong></div>
-            <div><span class="muted">Life</span><strong><span class="life {life_class}"></span>{'fresh' if life_ok else 'stale/error'}</strong></div>
+            <div><span class="muted">Life</span><strong><span class="life {life_class}"></span>{'fresh' if life_ok else 'stale/probe failed'}</strong></div>
             <div><span class="muted">Heartbeat age</span><strong>{payload["heartbeat_age_sec"] if payload["heartbeat_age_sec"] is not None else "n/a"}s</strong></div>
             <div><span class="muted">Current job</span><strong>{escape(payload["worker"].get("current_job_id") or "n/a")}</strong></div>
             <div><span class="muted">Last completed</span><strong>{escape(payload["worker"].get("last_completed_job_id") or "n/a")}</strong></div>

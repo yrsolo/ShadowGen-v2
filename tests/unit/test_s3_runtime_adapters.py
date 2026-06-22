@@ -34,10 +34,14 @@ class FakeS3Client:
             raise self.exceptions.NoSuchKey(Key)
         return {"Body": FakeBody(item["Body"]), "ContentType": item.get("ContentType")}
 
+    def delete_object(self, Bucket: str, Key: str):
+        self.objects.pop((Bucket, Key), None)
+        return {}
+
     def list_objects_v2(self, Bucket: str, Prefix: str):
         self.list_calls += 1
         contents = [{"Key": key} for current_bucket, key in self.objects if current_bucket == Bucket and key.startswith(Prefix)]
-        return {"Contents": contents}
+        return {"Contents": contents, "IsTruncated": False}
 
 
 def test_s3_backed_runtime_supports_shared_state(monkeypatch) -> None:
@@ -103,3 +107,45 @@ def test_s3_backed_runtime_supports_shared_state(monkeypatch) -> None:
     )
     api_runtime.worker_action_store.enqueue(command)
     assert worker_runtime.worker_action_store.list_recent(limit=1)[0].command_id == "cmd-1"
+
+
+def test_s3_job_repository_can_clear_request_cache(monkeypatch) -> None:
+    fake_client = FakeS3Client()
+
+    monkeypatch.setattr(
+        "shadowgen_adapters.runtime.factories.build_s3_client",
+        lambda endpoint_url, bucket_region, access_key_id, secret_access_key: fake_client,
+    )
+
+    runtime = build_runtime_adapters(
+        state_backend="s3",
+        queue_backend="memory",
+        state_dir=".shadowgen-ignored",
+        s3_endpoint_url="https://storage.example.test",
+        s3_bucket="shadowgen-bucket",
+        s3_region="ru-central1",
+        s3_access_key_id="key",
+        s3_secret_access_key="secret",
+        s3_prefix="shadowgen-v2-test",
+    )
+    asset_ref = runtime.asset_store.put_bytes(b"source-image", AssetKind.SOURCE, "image/png")
+    cache_key = render_request_key("source-hash", RenderRequest(source_asset_id=asset_ref.asset_id))
+    job = JobRecord(
+        job_id="job-cache-clear",
+        status=JobStatus.SUCCEEDED,
+        request=RenderRequest(source_asset_id=asset_ref.asset_id),
+        request_cache_key=cache_key,
+        cache_status="miss",
+    )
+    runtime.job_repository.create(job)
+    assert runtime.job_repository.find_by_request_cache_key(cache_key) is not None
+
+    cleared = runtime.job_repository.clear_request_cache()
+
+    assert cleared == 2
+    stored = runtime.job_repository.get("job-cache-clear")
+    assert stored is not None
+    assert stored.request_cache_key is None
+    assert stored.cache_status is None
+    assert runtime.job_repository.find_by_request_cache_key(cache_key) is None
+    assert not any(key.startswith("shadowgen-v2-test/jobs-cache/") for _, key in fake_client.objects)

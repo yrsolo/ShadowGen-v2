@@ -98,6 +98,7 @@ Worker control endpoints:
 - `POST /v1/jobs`
 - `GET /v1/jobs/{job_id}`
 - `GET /v1/jobs/{job_id}/result`
+- `POST /v1/jobs/cache/clear` - requires `X-Admin-Token`
 - `GET /v1/system/diagnostics`
 - `GET /v1/system/runtime-config`
 - `PUT /v1/system/runtime-config` - requires `X-Admin-Token`

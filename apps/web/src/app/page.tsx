@@ -9,6 +9,7 @@ import { UploadForm } from "../components/upload-form";
 import {
   createJob,
   createWorkerAction,
+  clearJobCache,
   getDiagnostics,
   getJob,
   getRuntimeConfig,
@@ -287,6 +288,7 @@ export default function HomePage() {
       await refreshDiagnostics();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to save runtime config");
+      throw cause;
     }
   }
 
@@ -297,6 +299,7 @@ export default function HomePage() {
       await refreshDiagnostics();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to trigger worker action");
+      throw cause;
     }
   }
 
@@ -307,6 +310,7 @@ export default function HomePage() {
       await refreshDiagnostics();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to mark job failed");
+      throw cause;
     }
   }
 
@@ -317,6 +321,19 @@ export default function HomePage() {
       await refreshDiagnostics();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Failed to delete job");
+      throw cause;
+    }
+  }
+
+  async function handleClearJobCache(adminToken: string) {
+    setError(null);
+    try {
+      const result = await clearJobCache(adminToken);
+      await refreshDiagnostics();
+      return result;
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to clear job cache");
+      throw cause;
     }
   }
 
@@ -594,6 +611,7 @@ export default function HomePage() {
             onTriggerWorkerAction={handleTriggerWorkerAction}
             onMarkJobFailed={handleMarkJobFailed}
             onDeleteJob={handleDeleteJob}
+            onClearJobCache={handleClearJobCache}
           />
         </>
       ) : userControls}

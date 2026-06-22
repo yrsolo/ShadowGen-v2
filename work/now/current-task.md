@@ -2,21 +2,23 @@
 
 ## Task
 
-Diagnose why the reachable new ML service at `http://192.168.1.8:9001` is not producing processed images through the worker, and make worker/API diagnostics expose the failure point clearly.
+Fix worker diagnostics and queue behavior when async ML processing outlives the queue visibility timeout.
 
 ## Goal
 
-Make failures visible at the exact boundary where they happen: ML handshake, request submission, async polling, result mapping, artifact storage, or queue/job lifecycle.
+Prevent a running async job from being claimed repeatedly, and make the UI distinguish worker liveness from the last job or ML failure.
 
 ## Scope Of This Stage
 
-- verify the live ML service handshake shape when reachable from this environment
-- inspect worker trace and diagnostics surfaces for swallowed ML errors
-- add concise ML submit/poll diagnostic context to failed jobs and worker state
-- keep API free of direct private ML calls
-- update tests, docs, and evidence
+- inspect worker loop delivery handling and state updates
+- keep YMQ messages invisible while a worker is still processing them
+- avoid starting a duplicate executor for the same in-flight job id
+- keep worker heartbeat/life independent from last job failure
+- update worker and web diagnostics labels
+- add focused tests and evidence
 
 ## Risks
 
-- diagnostics must not store base64 image payloads or large ML responses
-- private worker/ML hosts must stay behind the worker-side control plane
+- ack/nack behavior must remain correct for real processing failures
+- long async ML jobs must not be lost or duplicated
+- UI must still expose last job/ML errors without marking a healthy worker as dead

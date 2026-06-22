@@ -35,6 +35,8 @@ The queue carries business jobs only.
 - the worker owns business-job concurrency
 - the worker may keep several jobs in flight
 - queue deliveries are acknowledged only after worker handling completes
+- active queue deliveries have their visibility extended while async ML processing is still running
+- a redelivered message for a job already active in the same worker is treated as a duplicate delivery, not as a second job start
 - the worker does not build tensor batches
 - batching remains internal to the ML core and Triton path when supported
 
@@ -68,6 +70,8 @@ The worker has two control surfaces:
 - local LAN-facing control UI and JSON endpoints on the worker control port
 
 This split keeps the worker private while still allowing remote operations through the public frontend and API.
+
+Worker heartbeat in diagnostics means the worker process is still updating shared runtime state. It is separate from ML health and from the result of the last job; ML probe, submit, poll, and job trace fields carry those failures.
 
 ## Worker Container Mode
 

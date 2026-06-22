@@ -36,6 +36,23 @@ class FileJobRepository:
                 if payload.get("job_id") == job.job_id:
                     index_path.unlink()
 
+    def clear_request_cache(self) -> int:
+        cleared = 0
+        for path in self.root_dir.glob("*.json"):
+            job = JobRecord.model_validate_json(path.read_text(encoding="utf-8"))
+            if not job.request_cache_key and not job.cache_status and not job.reused_existing_job:
+                continue
+            if job.request_cache_key:
+                cleared += 1
+            job.request_cache_key = None
+            job.cache_status = None
+            job.reused_existing_job = False
+            path.write_text(job.model_dump_json(indent=2), encoding="utf-8")
+        for path in self.index_dir.glob("*.json"):
+            path.unlink()
+            cleared += 1
+        return cleared
+
     def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         indexed = self._get_indexed(cache_key)
         if indexed is not None:

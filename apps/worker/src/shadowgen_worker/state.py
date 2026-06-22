@@ -58,7 +58,7 @@ class WorkerStateService:
             state = self._ensure_state_loaded_locked()
             now = utc_now()
             changed = False
-            if not state.in_flight_jobs and state.status != "idle" and state.last_error is None:
+            if not state.in_flight_jobs and state.status != "idle":
                 state.status = "idle"
                 changed = True
             changed = self._sync_runtime_metadata_locked(state) or changed
@@ -127,7 +127,7 @@ class WorkerStateService:
         with self._lock:
             state = self._ensure_state_loaded_locked()
             state.in_flight_jobs = [item for item in state.in_flight_jobs if item.business_job_id != job_id]
-            state.status = "error" if not state.in_flight_jobs else "processing"
+            state.status = "processing" if state.in_flight_jobs else "idle"
             state.last_job_id = job_id
             state.current_job_id = state.in_flight_jobs[0].business_job_id if state.in_flight_jobs else None
             state.current_job_started_at = state.in_flight_jobs[0].submit_started_at if state.in_flight_jobs else None

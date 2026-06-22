@@ -28,6 +28,9 @@ class JobRepositoryPort(Protocol):
     def delete(self, job: JobRecord) -> None:
         ...
 
+    def clear_request_cache(self) -> int:
+        ...
+
     def find_by_request_cache_key(self, cache_key: str) -> JobRecord | None:
         ...
 

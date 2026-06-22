@@ -39,6 +39,9 @@ class ManageJobUseCase:
         job = self._get_job(job_id)
         self.job_repository.delete(job)
 
+    def clear_request_cache(self) -> int:
+        return self.job_repository.clear_request_cache()
+
     def _get_job(self, job_id: str) -> JobRecord:
         job = self.job_repository.get(job_id)
         if job is None:

@@ -15,7 +15,7 @@ Responsibilities:
 - compose application use cases and adapter wiring
 - expose diagnostics, runtime config, and worker action endpoints
 - short-circuit duplicate job creation when the same source image and render parameters already have a live or completed job
-- require `X-Admin-Token` for mutating runtime config and worker action endpoints
+- require `X-Admin-Token` for mutating runtime config, worker action, lost-job cleanup, and request-cache cleanup endpoints
 
 Main files:
 
