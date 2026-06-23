@@ -10,7 +10,7 @@ class WorkerConfig(BaseSettings):
     submit_timeout_ms: int = 120000
     poll_interval_ms: int = 200
     job_ttl_ms: int = 300000
-    capabilities_refresh_interval_sec: float = 45.0
+    capabilities_refresh_interval_sec: float = 300.0
     max_retries: int = 3
     state_backend: str = "file"
     state_dir: str = ".shadowgen-local"

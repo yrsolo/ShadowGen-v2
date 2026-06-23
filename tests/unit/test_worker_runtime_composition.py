@@ -16,7 +16,7 @@ def test_worker_runtime_reuses_ml_adapter_until_effective_url_changes(monkeypatc
             self,
             base_url: str | None = None,
             timeout_sec: float = 120.0,
-            capabilities_refresh_interval_sec: float = 45.0,
+            capabilities_refresh_interval_sec: float = 300.0,
         ) -> None:
             self.base_url = base_url
             self.timeout_sec = timeout_sec

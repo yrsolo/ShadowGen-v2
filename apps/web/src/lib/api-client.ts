@@ -14,6 +14,7 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 const TARGET_UPLOAD_IMAGE_SHORT_SIDE = 1024;
+const PNG_JPEG_REPACK_MIN_BYTES = 300_000;
 const JPEG_UPLOAD_QUALITY = 0.9;
 
 function jsonHeaders(adminToken?: string): HeadersInit {
@@ -70,6 +71,25 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: num
   });
 }
 
+function canvasHasAlpha(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D): boolean {
+  const { width, height } = canvas;
+  if (width === 0 || height === 0) {
+    return false;
+  }
+
+  try {
+    const data = context.getImageData(0, 0, width, height).data;
+    for (let index = 3; index < data.length; index += 4) {
+      if (data[index] < 255) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function prepareImageForUpload(file: File): Promise<{ blob: Blob; filename: string }> {
   if (!file.type.startsWith("image/")) {
     return { blob: file, filename: file.name };
@@ -77,11 +97,13 @@ async function prepareImageForUpload(file: File): Promise<{ blob: Blob; filename
 
   const image = await loadImage(file);
   const shortestSide = Math.min(image.naturalWidth, image.naturalHeight);
-  if (shortestSide <= TARGET_UPLOAD_IMAGE_SHORT_SIDE) {
+  const shouldResize = shortestSide > TARGET_UPLOAD_IMAGE_SHORT_SIDE;
+  const mayRepackOpaquePng = file.type === "image/png" && file.size >= PNG_JPEG_REPACK_MIN_BYTES;
+  if (!shouldResize && !mayRepackOpaquePng) {
     return { blob: file, filename: file.name };
   }
 
-  const scale = TARGET_UPLOAD_IMAGE_SHORT_SIDE / shortestSide;
+  const scale = shouldResize ? TARGET_UPLOAD_IMAGE_SHORT_SIDE / shortestSide : 1;
   const width = Math.max(1, Math.round(image.naturalWidth * scale));
   const height = Math.max(1, Math.round(image.naturalHeight * scale));
   const canvas = document.createElement("canvas");
@@ -94,7 +116,12 @@ async function prepareImageForUpload(file: File): Promise<{ blob: Blob; filename
   }
 
   context.drawImage(image, 0, 0, width, height);
-  const outputType = file.type === "image/png" ? "image/png" : "image/jpeg";
+  const hasAlpha = file.type === "image/png" && canvasHasAlpha(canvas, context);
+  if (!shouldResize && hasAlpha) {
+    return { blob: file, filename: file.name };
+  }
+
+  const outputType = hasAlpha ? "image/png" : "image/jpeg";
   const blob = await canvasToBlob(
     canvas,
     outputType,

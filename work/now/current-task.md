@@ -2,24 +2,22 @@
 
 ## Task
 
-Reduce async ML polling latency and buffer worker job metadata writes.
+Reduce remaining no-VPS overhead after ML polling improvements.
 
 ## Goal
 
-Cut avoidable worker-side latency in the current local-ML setup, especially polling and Object Storage metadata write overhead, while keeping behavior compatible with the existing serverless/YMQ/Object Storage fallback.
+Cut avoidable backend and client/API latency in the current local-ML setup while keeping behavior compatible with the existing serverless/YMQ/Object Storage fallback.
 
 ## Scope Of This Stage
 
-- reduce worker-side async ML polling interval from the current one-second cadence
-- update runtime examples/docs that expose the polling interval
-- buffer worker job metadata writes so fast trace stages are persisted at checkpoints instead of every start/finish
-- run focused tests around worker/process-job behavior
-- re-check low-risk no-VPS optimization candidates after the polling change
+- reduce repeated worker-side ML capability probes on warm jobs
+- reduce upload/source payload size for large non-transparent images
+- keep alpha-preserving behavior for transparent PNGs
+- run focused worker, web, and contract checks
 - record checks and results in `work/now/evidence.md`
 
 ## Risks
 
-- shorter ML polling increases worker-to-ML status requests
-- tests using stub async polling may need explicit intervals to stay fast
-- polling changes must not affect sync or legacy-sync execution paths
-- fewer intermediate job writes means Engineering diagnostics may see less per-stage progress during sub-second phases, while worker runtime state still shows live in-flight jobs
+- longer capability cache means capability changes are detected less frequently unless the ML URL changes or an explicit diagnostic probe is used
+- client-side JPEG conversion must not flatten transparent PNG uploads
+- smaller upload payloads change source bytes and therefore cache keys for newly uploaded images

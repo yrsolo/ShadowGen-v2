@@ -1,5 +1,18 @@
 # Evidence
 
+## 2026-06-23 Warm Probe And Upload Payload Reduction
+
+- live screenshots after polling changes showed `duration_ms=936`, `ml_total_ms=241`, `ml_probe=122`, `asset_bytes_loaded=113`, `ml_submit=52`, `ml_poll=360`, and `artifact_store=123`; this made non-poll overhead the next target
+- raised the default `CAPABILITIES_REFRESH_INTERVAL_SEC` from 45 seconds to 300 seconds in worker config, ML-core adapter default, and env examples
+- warm jobs against the same effective ML URL should now avoid the remote `/health` + `/v1/capabilities` handshake for longer; changing the effective ML URL still creates a fresh adapter
+- web upload preparation now repacks large opaque PNG files (`>=300000` bytes) as JPEG after checking every alpha byte on the canvas
+- transparent PNG files keep the alpha-preserving PNG path, and oversized transparent PNG files still resize as PNG
+- updated worker/runtime/web docs and `work/now/latency-analysis.md`
+- `python -m pytest tests/unit/test_ml_core_adapter.py tests/unit/test_worker_runtime_composition.py tests/unit/test_worker_loop_resilience.py tests/unit/test_process_job_failures.py tests/smoke/test_worker_process_job.py -q` -> `15 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with CRLF warnings only
+
 ## 2026-06-23 Worker Job Write Buffering
 
 - buffered fast `ProcessJobUseCase` trace writes by removing intermediate `job_repository.update()` calls around `ml_probe`, `asset_bytes_loaded`, `ml_submit` start, and `artifact_store` start

@@ -77,7 +77,7 @@ For short jobs, the previous one-second interval added up to almost one second o
 
 Before the current optimization pass, `build_worker_runtime()` created a new `MLCorePipelineAdapter` inside `use_case_factory()`. The adapter had an in-memory capability cache, but the cache was thrown away after each job because each job received a fresh adapter instance.
 
-The live `ml_probe` cost was consistently about 180-237 ms. The worker now reuses one adapter per effective ML URL, so warm jobs can reuse the adapter capability cache until `CAPABILITIES_REFRESH_INTERVAL_SEC` expires or the effective ML URL changes.
+The live `ml_probe` cost was consistently about 120-237 ms when the capability cache was cold or expired. The worker now reuses one adapter per effective ML URL, and `CAPABILITIES_REFRESH_INTERVAL_SEC` now defaults to 300 seconds so warm jobs can reuse the adapter capability cache for longer. Effective ML URL changes still create a fresh adapter.
 
 ### 3. Object Storage reads and writes in worker hot path
 
@@ -152,6 +152,7 @@ Risk: must handle runtime ML URL override changes cleanly.
 - Buffer trace writes: write job state on externally meaningful transitions, and write the full final trace at completion/failure. Implemented for fast worker stages.
 - Keep worker runtime state as the live progress surface while the job is running.
 - Store final asset bytes and metadata in parallel, or remove the separate metadata read from the final content path by making final asset object keys derivable from asset IDs and carrying MIME type in job result.
+- Reduce browser upload payloads before they reach API/Object Storage. Large opaque PNG files are now repacked as JPEG, while transparent PNG files are preserved.
 
 Expected impact: likely several hundred ms across source load, artifact store, and unmeasured inter-stage writes.
 
@@ -261,13 +262,14 @@ Risk: VPS becomes part of the critical public path unless fallback is carefully 
 
 1. Fix measurement labels and add explicit backend overhead fields.
 2. Reduce/adapt `POLL_INTERVAL_MS`; this is now implemented as a 200 ms default.
-3. Reuse ML capability cache across jobs; this is now implemented for one adapter per effective ML URL.
+3. Reuse ML capability cache across jobs; this is now implemented for one adapter per effective ML URL with a 300 second default refresh interval.
 4. Return full job from create and remove immediate initial `getJob()`. Implemented.
 5. Reduce worker Object Storage writes and duplicate source metadata reads. Duplicate source metadata reads are now reduced by S3 metadata caching, and fast worker trace writes are now buffered to checkpoint writes.
-6. Add direct or signed final artifact URLs.
-7. Add VPS realtime completion channel with browser polling fallback.
-8. Add VPS wake signal if queue pickup still shows measurable delay.
-9. Consider VPS metadata cache only after the simpler changes have been measured.
+6. Reduce browser upload payloads for large opaque PNG files. Implemented by JPEG repacking while preserving transparent PNG files.
+7. Add direct or signed final artifact URLs.
+8. Add VPS realtime completion channel with browser polling fallback.
+9. Add VPS wake signal if queue pickup still shows measurable delay.
+10. Consider VPS metadata cache only after the simpler changes have been measured.
 
 ## Measurement Plan
 

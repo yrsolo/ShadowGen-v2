@@ -31,7 +31,7 @@ class MLCorePipelineAdapter:
         self,
         base_url: str | None = None,
         timeout_sec: float = 120.0,
-        capabilities_refresh_interval_sec: float = 45.0,
+        capabilities_refresh_interval_sec: float = 300.0,
     ) -> None:
         self.base_url = base_url.rstrip("/") if base_url else None
         self.timeout_sec = timeout_sec
