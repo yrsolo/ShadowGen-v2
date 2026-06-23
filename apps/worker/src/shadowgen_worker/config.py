@@ -45,6 +45,9 @@ class WorkerConfig(BaseSettings):
     worker_vps_token: str | None = None
     vps_realtime_signing_secret: str | None = None
     vps_event_timeout_ms: int = 300
+    vps_wake_enabled: bool = False
+    vps_wake_reconnect_min_sec: float = 1.0
+    vps_wake_reconnect_max_sec: float = 30.0
 
     model_config = SettingsConfigDict(
         env_file=".env.shadowgen",

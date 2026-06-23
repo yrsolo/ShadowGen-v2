@@ -7,9 +7,10 @@
 3. Wire `apps/api` to publish queued events and return job-scoped SSE subscription metadata.
 4. Wire `apps/web` to consume SSE with API polling fallback and timing diagnostics.
 5. Wire `apps/worker` to publish best-effort worker-seen and terminal lifecycle events.
-6. Deploy API/Web container revisions and restart the local worker container with realtime env.
-7. Update docs, env examples, and evidence.
-8. Run focused/full Python tests, Web build, docs check, and diff checks.
+6. Wire worker wake hints through outbound SSE and a local worker loop wake event.
+7. Deploy API/Web container revisions and restart the local worker container with realtime env.
+8. Update docs, env examples, and evidence.
+9. Run focused/full Python tests, Web build, docs check, and diff checks.
 
 ## Checks
 
@@ -22,6 +23,7 @@
 - `powershell -ExecutionPolicy Bypass -File scripts/deploy-realtime-vps.ps1`
 - public health checks for realtime/API/Web
 - worker container env/status check
+- wake endpoint and worker listener checks
 
 ## Deliverables
 

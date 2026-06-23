@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from shadowgen_realtime.config import RealtimeConfig
-from shadowgen_realtime.events import EventBuffer
+from shadowgen_realtime.events import EventBuffer, WakeBroker
 from shadowgen_realtime.routes import router
 
 
@@ -19,6 +19,7 @@ def create_app() -> FastAPI:
     )
     app.state.config = config
     app.state.event_buffer = EventBuffer(retention_sec=config.event_retention_sec)
+    app.state.wake_broker = WakeBroker()
     app.include_router(router)
     return app
 

@@ -9,7 +9,8 @@ Current status:
 - `apps/api` can publish queued-job events and return job-scoped SSE subscription metadata
 - `apps/web` can listen to SSE and keeps API polling as fallback
 - `apps/worker` can publish worker-seen and terminal lifecycle events
-- worker wake hints are not implemented yet; executable work still comes from YMQ
+- `apps/worker` can keep an outbound wake stream to interrupt idle sleep after queued-job events
+- executable work still comes from YMQ
 - Object Storage and YMQ remain the durable production path
 
 ## Runtime Role
@@ -21,6 +22,7 @@ It provides:
 - `GET /health`
 - `POST /internal/v1/jobs/queued`
 - `POST /internal/v1/jobs/events`
+- `GET /internal/v1/workers/{worker_id}/wake`
 - `GET /v1/realtime/jobs/{job_id}/events`
 
 It does not provide:
@@ -129,9 +131,19 @@ VPS_ACCELERATOR_URL=https://rt.shadowgen.solofarm.ru
 WORKER_ID=local-gpu-1
 WORKER_VPS_TOKEN=<same value as server .env.realtime>
 VPS_EVENT_TIMEOUT_MS=300
+VPS_WAKE_ENABLED=true
+VPS_WAKE_RECONNECT_MIN_SEC=1
+VPS_WAKE_RECONNECT_MAX_SEC=30
 ```
 
 `VPS_INTERNAL_TOKEN` is for API-to-VPS calls. `WORKER_VPS_TOKEN` is for worker-to-VPS calls. `VPS_REALTIME_SIGNING_SECRET` signs browser subscription tokens.
+
+Wake stream behavior:
+
+- the worker opens an outbound SSE stream to `/internal/v1/workers/{worker_id}/wake`
+- the VPS emits `job_wake` after a non-duplicate queued-job signal
+- the worker sets a local wake event and immediately returns to its normal queue receive loop
+- the worker never executes the `job_id` from the wake command directly
 
 ## Safety Notes
 

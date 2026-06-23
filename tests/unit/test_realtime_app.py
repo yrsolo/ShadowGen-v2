@@ -69,6 +69,18 @@ def test_internal_queued_endpoint_publishes_and_deduplicates(monkeypatch) -> Non
     assert second.status_code == 200
     assert second.json() == {"accepted": True, "duplicate": True}
     assert client.get("/health").json()["jobs_with_events"] == 1
+    assert client.get("/health").json()["wake_commands"] == 1
+
+
+def test_worker_wake_stream_requires_worker_token(monkeypatch) -> None:
+    client = _client(monkeypatch)
+
+    response = client.get(
+        "/internal/v1/workers/worker-1/wake",
+        headers={"Authorization": "Bearer internal-token"},
+    )
+
+    assert response.status_code == 401
 
 
 def test_worker_event_endpoint_requires_worker_token(monkeypatch) -> None:

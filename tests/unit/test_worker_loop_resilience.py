@@ -154,3 +154,23 @@ def test_worker_loop_does_not_start_duplicate_active_job_delivery() -> None:
     assert duplicate.visibility_extensions == [60]
     assert duplicate.acked is True
     assert duplicate.nacked is False
+
+
+def test_worker_loop_wake_interrupts_idle_sleep_without_direct_execution() -> None:
+    wake_event = Event()
+    queue = ScriptedQueue([])
+    executor = BlockingExecutor()
+    loop = WorkerLoop(
+        queue=queue,
+        executor=executor,
+        state_service=make_state_service(),
+        poll_interval_sec=10,
+        wake_event=wake_event,
+    )
+
+    wake_event.set()
+    started_at = time.monotonic()
+    loop._sleep_until_poll_or_wake()
+
+    assert time.monotonic() - started_at < 1
+    assert executor.calls == []

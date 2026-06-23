@@ -2,7 +2,7 @@
 
 ## Status
 
-Planning document with Phase 1 contracts, Phase 2 realtime service, Phase 3 API notifier, Phase 4 browser SSE fallback, and Phase 5 worker lifecycle event publishing implemented. Worker wake hints remain future work.
+Planning document with Phase 1 contracts, Phase 2 realtime service, Phase 3 API notifier, Phase 4 browser SSE fallback, Phase 5 worker lifecycle event publishing, and Phase 6 worker wake hints implemented.
 
 ## Why Add A VPS Layer
 
@@ -715,7 +715,7 @@ Rollback:
 
 Goal: let worker terminal status reach browser without waiting for API polling.
 
-Status: implemented with HTTP event publishing. WebSocket wake/reconnect work remains out of this stage.
+Status: implemented with HTTP event publishing.
 
 Tasks:
 
@@ -741,14 +741,16 @@ Rollback:
 
 Goal: reduce queue pickup delay while preserving YMQ correctness.
 
+Status: implemented with worker outbound SSE wake stream and local `threading.Event` wake.
+
 Tasks:
 
-- extend the worker loop with a `threading.Event` or equivalent wake primitive
-- make VPS `job_wake` command set that event
-- when awakened, the worker immediately calls `queue.receive()`
-- keep normal `queue.receive()` and sleep behavior if no wake arrives
-- do not direct-execute `job_id`
-- add metrics for wake commands received and wake-to-receive latency
+- extend the worker loop with a `threading.Event` or equivalent wake primitive - done
+- make VPS `job_wake` command set that event - done
+- when awakened, the worker immediately calls `queue.receive()` - done
+- keep normal `queue.receive()` and sleep behavior if no wake arrives - done
+- do not direct-execute `job_id` - done
+- add metrics for wake commands received and wake-to-receive latency - pending
 
 Checks:
 

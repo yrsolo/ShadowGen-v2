@@ -4,7 +4,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
-from shadowgen_contracts import JobRealtimeEvent
+from shadowgen_contracts import JobRealtimeEvent, JobWakeCommand
 
 
 @dataclass(slots=True)
@@ -74,9 +74,42 @@ class EventBuffer:
         self._event_ids = remaining_ids
 
 
+class WakeBroker:
+    def __init__(self, max_commands: int = 1000) -> None:
+        self.max_commands = max(1, max_commands)
+        self._commands: list[JobWakeCommand] = []
+        self._condition = asyncio.Condition()
+
+    async def publish(self, command: JobWakeCommand) -> None:
+        async with self._condition:
+            self._commands.append(command)
+            if len(self._commands) > self.max_commands:
+                self._commands = self._commands[-self.max_commands :]
+            self._condition.notify_all()
+
+    async def command_count(self) -> int:
+        async with self._condition:
+            return len(self._commands)
+
+    async def wait_for_commands(self, cursor: int, timeout_sec: int) -> tuple[int, list[JobWakeCommand]]:
+        async with self._condition:
+            if cursor >= len(self._commands):
+                try:
+                    await asyncio.wait_for(self._condition.wait(), timeout=max(1, timeout_sec))
+                except asyncio.TimeoutError:
+                    return cursor, []
+            next_commands = self._commands[cursor:]
+            return len(self._commands), list(next_commands)
+
+
 def encode_sse(event: JobRealtimeEvent) -> str:
     payload = event.model_dump_json()
     return f"id: {event.event_id}\nevent: {event.event_type}\ndata: {payload}\n\n"
+
+
+def encode_wake_sse(command: JobWakeCommand) -> str:
+    payload = command.model_dump_json()
+    return f"id: {command.command_id}\nevent: job_wake\ndata: {payload}\n\n"
 
 
 def encode_keepalive() -> str:

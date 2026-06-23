@@ -2,9 +2,9 @@
 
 ## Status
 
-Shared DTOs and the VPS realtime service are implemented. API queued notifications, browser SSE subscription metadata, browser SSE fallback, and worker lifecycle event publishing are wired behind `VPS_ACCELERATOR_ENABLED`.
+Shared DTOs and the VPS realtime service are implemented. API queued notifications, browser SSE subscription metadata, browser SSE fallback, worker lifecycle event publishing, and worker wake hints are wired behind `VPS_ACCELERATOR_ENABLED`.
 
-Worker wake hints are not implemented yet. Executable work still comes from YMQ.
+Executable work still comes from YMQ.
 
 ## Design Rule
 
@@ -218,4 +218,20 @@ MVP wake rule:
 - the wake command may wake the worker loop
 - executable work must still come from YMQ
 - direct execution by `job_id` remains out of scope until a durable claim/lease contract exists
-- current implementation has not enabled the wake command transport yet
+- duplicate queued signals must not publish duplicate wake commands
+
+Worker wake stream:
+
+```http
+GET /internal/v1/workers/{worker_id}/wake
+Authorization: Bearer <WORKER_VPS_TOKEN>
+Accept: text/event-stream
+```
+
+SSE event:
+
+```text
+id: wake-command-id
+event: job_wake
+data: {"message_version":"1","message_type":"job_wake","command_id":"wake-command-id","job_id":"job-1","queued_at":"2026-06-23T12:00:00Z"}
+```

@@ -7,13 +7,14 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from shadowgen_contracts import (
+    JobWakeCommand,
     JobQueuedSignal,
     JobRealtimeEvent,
     RealtimeAcceptedResponse,
 )
 
 from shadowgen_realtime.auth import assert_origin_allowed, require_bearer_token, verify_job_token
-from shadowgen_realtime.events import encode_keepalive, encode_sse
+from shadowgen_realtime.events import encode_keepalive, encode_sse, encode_wake_sse
 
 router = APIRouter()
 
@@ -25,6 +26,7 @@ async def health(request: Request):
         "status": "ok",
         "service": "shadowgen-realtime",
         "jobs_with_events": await buffer.job_count(),
+        "wake_commands": await request.app.state.wake_broker.command_count(),
     }
 
 
@@ -49,6 +51,14 @@ async def job_queued(
         result_available=False,
     )
     accepted = await request.app.state.event_buffer.publish(event)
+    if accepted:
+        await request.app.state.wake_broker.publish(
+            JobWakeCommand(
+                command_id=f"wake:{uuid4()}",
+                job_id=signal.job_id,
+                queued_at=signal.queued_at,
+            )
+        )
     return RealtimeAcceptedResponse(accepted=True, duplicate=not accepted)
 
 
@@ -93,6 +103,34 @@ async def job_events(
                 yield encode_sse(event)
             await request.app.state.event_buffer.wait_for_event(job_id, config.heartbeat_interval_sec)
             if not events:
+                yield encode_keepalive()
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/internal/v1/workers/{worker_id}/wake")
+async def worker_wake_stream(
+    worker_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+):
+    config = request.app.state.config
+    require_bearer_token(authorization, config.worker_vps_token, "worker")
+
+    async def stream():
+        cursor = await request.app.state.wake_broker.command_count()
+        while True:
+            cursor, commands = await request.app.state.wake_broker.wait_for_commands(cursor, config.heartbeat_interval_sec)
+            for command in commands:
+                yield encode_wake_sse(command)
+            if not commands:
                 yield encode_keepalive()
 
     return StreamingResponse(

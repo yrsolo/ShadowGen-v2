@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from concurrent.futures import Future, ThreadPoolExecutor
+from threading import Event
 
 
 @dataclass(slots=True)
@@ -21,6 +22,7 @@ class WorkerLoop:
         max_in_flight_jobs: int = 4,
         queue_visibility_timeout_sec: int = 120,
         queue_visibility_extend_interval_sec: int = 30,
+        wake_event: Event | None = None,
     ) -> None:
         self.queue = queue
         self.executor = executor
@@ -32,6 +34,7 @@ class WorkerLoop:
         self._pool = ThreadPoolExecutor(max_workers=self.max_in_flight_jobs, thread_name_prefix="shadowgen-worker")
         self._in_flight: dict[Future, _InFlightDelivery] = {}
         self._job_futures: dict[str, Future] = {}
+        self.wake_event = wake_event
 
     def tick(self) -> bool:
         processed = self._drain_finished()
@@ -63,7 +66,14 @@ class WorkerLoop:
         self.state_service.boot()
         while True:
             if not self.tick():
-                time.sleep(self.poll_interval_sec)
+                self._sleep_until_poll_or_wake()
+
+    def _sleep_until_poll_or_wake(self) -> None:
+        if self.wake_event is None:
+            time.sleep(self.poll_interval_sec)
+            return
+        self.wake_event.wait(timeout=self.poll_interval_sec)
+        self.wake_event.clear()
 
     def _drain_finished(self) -> bool:
         processed = False

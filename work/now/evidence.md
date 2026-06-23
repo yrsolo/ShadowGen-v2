@@ -674,6 +674,51 @@ Checks:
 - `docker build -f apps/realtime/Dockerfile -t shadowgen-realtime:local .` -> passed
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
 - `git diff --check` -> passed with LF-to-CRLF warnings only
+
+## 2026-06-23 Worker Wake Hints
+
+Implemented and deployed worker wake hints on top of the realtime VPS service.
+
+Updated behavior:
+
+- `POST /internal/v1/jobs/queued` now publishes one `job_wake` command for non-duplicate queued signals.
+- `GET /internal/v1/workers/{worker_id}/wake` streams `job_wake` commands to workers over outbound SSE.
+- The worker has a `RealtimeWakeListener` that validates `JobWakeCommand` messages and sets a local wake event.
+- `WorkerLoop` waits on that local wake event during idle sleep, then returns to the normal YMQ `receive()` path.
+- The wake command `job_id` is never executed directly; YMQ remains the executable job source.
+- Duplicate queued notifications do not produce duplicate wake commands.
+- `.env*` examples and runtime docs now include `VPS_WAKE_ENABLED`, `VPS_WAKE_RECONNECT_MIN_SEC`, and `VPS_WAKE_RECONNECT_MAX_SEC`.
+- Local `.env.shadowgen` has `VPS_WAKE_ENABLED=true`; secrets remain gitignored and were not printed.
+
+Deployment result:
+
+- realtime service redeployed to `yrsolo@89.169.132.198:/opt/shadowgen-realtime`
+- public health after deploy: `https://rt.shadowgen.solofarm.ru/health` -> includes `wake_commands`
+- local `shadowgen-worker` container rebuilt and restarted
+- worker env check:
+  - `VPS_ACCELERATOR_ENABLED=true`
+  - `VPS_ACCELERATOR_URL=https://rt.shadowgen.solofarm.ru`
+  - `WORKER_ID=local-gpu-1`
+  - `VPS_WAKE_ENABLED=true`
+  - `WORKER_VPS_TOKEN=set`
+- VPS logs show worker wake stream: `GET /internal/v1/workers/local-gpu-1/wake HTTP/1.1` -> `200 OK`
+- wrong worker token check for wake stream -> `401 Unauthorized`
+- fake transient queued-signal smoke:
+  - internal queued response: `accepted=true`, `duplicate=false`
+  - realtime health after smoke: `jobs_with_events=1`, `wake_commands=1`
+- worker status after smoke: `idle`, `recent_failures=0`, `queue_backend=ymq`
+
+Checks:
+
+- `python -m pytest tests/unit/test_realtime_app.py tests/unit/test_worker_loop_resilience.py tests/unit/test_worker_runtime_composition.py tests/unit/test_realtime_contracts.py -q` -> `15 passed`
+- `python -m pytest tests/unit/test_architecture_boundaries.py -q` -> `4 passed`
+- `python -m pytest -q` -> `66 passed, 1 skipped`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `docker build -f apps/realtime/Dockerfile -t shadowgen-realtime:local .` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only
+- `powershell -ExecutionPolicy Bypass -File scripts/deploy-realtime-vps.ps1` -> passed
+- `cmd /c scripts\run-worker-cloud-container.cmd` -> passed
 - `powershell -NoProfile -Command "[scriptblock]::Create((Get-Content -Path 'scripts/deploy-realtime-vps.ps1' -Raw)) | Out-Null; Write-Output 'deploy script parse ok'"` -> passed
 - `powershell -ExecutionPolicy Bypass -File scripts/deploy-realtime-vps.ps1` -> passed
 - `curl.exe -fsS http://89.169.132.198:8082/health` -> passed

@@ -86,14 +86,14 @@ The worker container mode is self-contained:
 
 ## Optional Realtime VPS Service
 
-`apps/realtime` is a deployable accelerator service for realtime browser events.
+`apps/realtime` is a deployable accelerator service for realtime browser events and worker wake hints.
 
 Current status:
 
 - it is deployed on the VPS behind `https://rt.shadowgen.solofarm.ru`
 - it exposes health, internal queued-event ingestion, internal worker event ingestion, and public SSE job streams
-- API notifications, browser SSE, and worker lifecycle event publishing are optional and controlled by `VPS_ACCELERATOR_ENABLED`
-- worker wake hints are not implemented yet
+- API notifications, browser SSE, worker lifecycle event publishing, and worker wake hints are optional and controlled by `VPS_ACCELERATOR_ENABLED`
+- wake hints interrupt worker idle sleep but do not replace YMQ delivery
 - the durable runtime remains Object Storage plus YMQ
 
 If the realtime service is down, the current browser/API/YMQ/worker path is unaffected.

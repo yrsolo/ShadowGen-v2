@@ -1,4 +1,5 @@
 import threading
+from threading import Event
 from threading import Lock
 
 import uvicorn
@@ -16,6 +17,7 @@ from shadowgen_worker.executor import JobExecutor
 from shadowgen_worker.loop import WorkerLoop
 from shadowgen_worker.metadata import collect_worker_version_info
 from shadowgen_worker.realtime_observer import RealtimePublishingObserver
+from shadowgen_worker.realtime_wake import RealtimeWakeListener
 from shadowgen_worker.state import WorkerStateService
 
 
@@ -72,6 +74,7 @@ def build_worker_runtime(config: WorkerConfig):
         if config.vps_accelerator_enabled and config.vps_accelerator_url and config.worker_vps_token
         else state_service
     )
+    wake_event = Event() if config.vps_accelerator_enabled and config.vps_wake_enabled and config.vps_accelerator_url and config.worker_vps_token else None
 
     def get_pipeline_adapter() -> MLCorePipelineAdapter:
         base_url = resolve_legacy_base_url(config, runtime)
@@ -107,6 +110,7 @@ def build_worker_runtime(config: WorkerConfig):
         max_in_flight_jobs=config.max_in_flight_jobs,
         queue_visibility_timeout_sec=config.queue_visibility_timeout_sec,
         queue_visibility_extend_interval_sec=config.queue_visibility_extend_interval_sec,
+        wake_event=wake_event,
     )
     action_executor = WorkerActionExecutor(
         config=config,
@@ -125,7 +129,19 @@ def build_worker_runtime(config: WorkerConfig):
         state_service=state_service,
         version_info=version_info,
     )
-    return runtime, state_service, worker_loop, control_loop, control_app
+    wake_listener = (
+        RealtimeWakeListener(
+            base_url=config.vps_accelerator_url,
+            worker_id=config.worker_id,
+            worker_token=config.worker_vps_token,
+            wake_event=wake_event,
+            reconnect_min_sec=config.vps_wake_reconnect_min_sec,
+            reconnect_max_sec=config.vps_wake_reconnect_max_sec,
+        )
+        if wake_event is not None and config.vps_accelerator_url and config.worker_vps_token
+        else None
+    )
+    return runtime, state_service, worker_loop, control_loop, control_app, wake_listener
 
 
 def main():
@@ -140,10 +156,12 @@ def main():
         f"control_port={config.worker_control_port}",
         flush=True,
     )
-    _, state_service, worker_loop, control_loop, control_app = build_worker_runtime(config)
+    _, state_service, worker_loop, control_loop, control_app, wake_listener = build_worker_runtime(config)
     state_service.boot()
     threading.Thread(target=worker_loop.run_forever, daemon=True).start()
     threading.Thread(target=control_loop.run_forever, daemon=True).start()
+    if wake_listener is not None:
+        threading.Thread(target=wake_listener.run_forever, daemon=True).start()
     uvicorn.run(control_app, host=config.worker_control_host, port=config.worker_control_port)
 
 

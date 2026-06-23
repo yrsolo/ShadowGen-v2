@@ -49,6 +49,9 @@ Important keys:
   - `VPS_REALTIME_TOKEN_TTL_SEC`
   - `VPS_REALTIME_FALLBACK_POLL_MS`
   - `VPS_EVENT_TIMEOUT_MS`
+  - `VPS_WAKE_ENABLED`
+  - `VPS_WAKE_RECONNECT_MIN_SEC`
+  - `VPS_WAKE_RECONNECT_MAX_SEC`
 
 ## Main Scripts
 
@@ -91,6 +94,7 @@ The active wiring is built in:
 - `apps/web` and `apps/api` are the public cloud-facing services
 - `apps/worker` remains local and owns business-job orchestration
 - `apps/realtime` is optional; when enabled it accelerates browser observation through SSE and accepts best-effort API/worker lifecycle events
+- `VPS_WAKE_ENABLED=true` lets the worker keep an outbound wake stream to the realtime service; wake events only prompt an immediate YMQ receive attempt
 - realtime failures must not fail job creation or worker execution
 - the worker discovers ML-core sync/async capabilities at runtime
 - `POLL_INTERVAL_MS` defaults to 200 ms because the ML service is expected to be local to the worker host; raise it if the ML endpoint becomes remote or rate-sensitive
