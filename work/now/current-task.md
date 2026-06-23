@@ -2,23 +2,22 @@
 
 ## Task
 
-Fix worker diagnostics and queue behavior when async ML processing outlives the queue visibility timeout.
+Reduce async ML polling latency and identify the next no-VPS optimizations.
 
 ## Goal
 
-Prevent a running async job from being claimed repeatedly, and make the UI distinguish worker liveness from the last job or ML failure.
+Cut the largest avoidable `ml_poll` delay in the current local-ML setup, keep behavior compatible with the existing serverless/YMQ/Object Storage fallback, and leave clear evidence for the next optimization stage.
 
 ## Scope Of This Stage
 
-- inspect worker loop delivery handling and state updates
-- keep YMQ messages invisible while a worker is still processing them
-- avoid starting a duplicate executor for the same in-flight job id
-- keep worker heartbeat/life independent from last job failure
-- update worker and web diagnostics labels
-- add focused tests and evidence
+- reduce worker-side async ML polling interval from the current one-second cadence
+- update runtime examples/docs that expose the polling interval
+- run focused tests around worker/process-job behavior
+- re-check low-risk no-VPS optimization candidates after the polling change
+- record checks and results in `work/now/evidence.md`
 
 ## Risks
 
-- ack/nack behavior must remain correct for real processing failures
-- long async ML jobs must not be lost or duplicated
-- UI must still expose last job/ML errors without marking a healthy worker as dead
+- shorter ML polling increases worker-to-ML status requests
+- tests using stub async polling may need explicit intervals to stay fast
+- polling changes must not affect sync or legacy-sync execution paths

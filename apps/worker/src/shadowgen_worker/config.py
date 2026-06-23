@@ -8,7 +8,7 @@ class WorkerConfig(BaseSettings):
     worker_state_heartbeat_interval_sec: float = 30.0
     max_in_flight_jobs: int = 4
     submit_timeout_ms: int = 120000
-    poll_interval_ms: int = 1000
+    poll_interval_ms: int = 200
     job_ttl_ms: int = 300000
     capabilities_refresh_interval_sec: float = 45.0
     max_retries: int = 3

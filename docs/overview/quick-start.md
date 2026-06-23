@@ -79,5 +79,6 @@ The same script starts `shadowgen-worker` in detached mode with `--restart unles
 - the worker defaults the effective ML URL from its config and only uses runtime override when one is explicitly set
 - worker/core execution mode is discovered at runtime from `GET /health` and `GET /v1/capabilities`
 - `MAX_IN_FLIGHT_JOBS` controls business-job concurrency only
+- `POLL_INTERVAL_MS` controls worker-side async ML status polling; the default is 200 ms for the local ML service
 - batching stays inside the ML core and Triton layer
 - the default worker container is self-contained and portable; only `.env.shadowgen`, network access to YMQ/Object Storage, and access to the ML URL are required at runtime

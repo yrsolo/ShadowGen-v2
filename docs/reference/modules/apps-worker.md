@@ -52,6 +52,7 @@ Runtime note:
 - the local worker control page can update the shared runtime ML URL through token-protected `PUT /api/runtime-config`; the effective URL is republished to worker state immediately and applies to subsequent jobs
 - `diagnostic_probe` checks the worker action round-trip and probes the effective ML URL from the worker side, using the ML-core health path or legacy `/test` compatibility path
 - service detection is contract-based: a valid ML-core handshake selects sync/async `/v1/render*`; legacy mode requires a 2xx `/test` and uses `/v1/process`
+- the worker reuses one ML-core adapter per effective ML URL, so capability probing is cached across warm jobs until `CAPABILITIES_REFRESH_INTERVAL_SEC` expires or the effective ML URL changes
 - new ML-service async statuses `pending`, `running`, `completed`, `failed`, and `cancelled` are mapped into the business job lifecycle
 - ML HTTP failures are recorded with method, endpoint path, HTTP status, ML error code, and message in the failing job trace stage
 - async ML terminal errors are recorded on the `ml_poll` trace stage with ML job id, request id, status, error code, and details when provided

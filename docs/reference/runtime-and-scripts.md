@@ -79,6 +79,7 @@ The active wiring is built in:
 - `apps/web` and `apps/api` are the public cloud-facing services
 - `apps/worker` remains local and owns business-job orchestration
 - the worker discovers ML-core sync/async capabilities at runtime
+- `POLL_INTERVAL_MS` defaults to 200 ms because the ML service is expected to be local to the worker host; raise it if the ML endpoint becomes remote or rate-sensitive
 - the worker extends queue visibility while an async ML job is running; keep `QUEUE_VISIBILITY_TIMEOUT_SEC` comfortably above the extension interval
 - `LEGACY_ML_BASE_URL` remains the effective worker-side ML target variable for now, even when the endpoint is actually the new ML core
 - `LEGACY_ML_HOST_IP_OVERRIDE` can force Docker `--add-host` mapping when the ML URL uses a hostname that the container cannot resolve

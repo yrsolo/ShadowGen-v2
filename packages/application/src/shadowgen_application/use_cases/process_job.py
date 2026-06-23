@@ -35,7 +35,7 @@ class ProcessJobUseCase:
         asset_store: AssetStorePort,
         pipeline: RenderPipelinePort,
         observer: ProcessJobObserverPort | None = None,
-        poll_interval_ms: int = 1000,
+        poll_interval_ms: int = 200,
         job_ttl_ms: int = 300_000,
         max_retries: int = 3,
     ) -> None:

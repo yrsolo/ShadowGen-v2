@@ -1,5 +1,29 @@
 # Evidence
 
+## 2026-06-23 Faster ML Polling And Warm Capability Cache
+
+- changed the worker/application default async ML polling interval from `1000` ms to `200` ms
+- updated `.env.shadowgen.example`, `.env.example`, and `.env.prod.example` to expose `POLL_INTERVAL_MS=200`
+- changed worker composition so `MLCorePipelineAdapter` is reused per effective ML URL instead of being recreated for every business job
+- runtime ML URL overrides still create a new adapter because the cache key is the resolved effective ML URL
+- added `tests/unit/test_worker_runtime_composition.py` to cover adapter reuse and cache invalidation on effective URL changes
+- updated worker/runtime docs and `work/now/latency-analysis.md` to describe the new polling default and warm capability cache behavior
+- `python -m pytest tests/unit/test_process_job_failures.py tests/unit/test_ml_core_adapter.py tests/smoke/test_worker_process_job.py tests/unit/test_worker_runtime_composition.py -q` -> `12 passed`
+- `python -m pytest tests/unit/test_worker_loop_resilience.py -q` -> `3 passed`
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+
+## 2026-06-23 Latency Analysis
+
+- inspected web submit, timer, polling, and result rendering paths
+- inspected API create/get/result and asset upload/content routes
+- inspected worker loop, queue receive/visibility behavior, ML-core submit/poll, and S3-backed job/asset stores
+- live `GET https://api.shadowgen.solofarm.ru/v1/system/diagnostics` returned recent jobs matching the supplied screenshots
+- live samples showed worker duration over ML `total_ms` of roughly 1.3-2.2 seconds, averaging about 1.8 seconds across six recent jobs
+- live samples showed `ml_poll` over ML `total_ms` of roughly 0.6-1.1 seconds in most jobs, matching the 1000 ms worker ML poll interval
+- live `ml_probe` stages were roughly 180-237 ms, and the current worker creates a fresh ML-core adapter per job, so its capability cache is not reused across business jobs
+- a second live diagnostics request timed out after 20 seconds, consistent with the expensive diagnostics path that lists many Object Storage job JSON records
+- wrote the detailed analysis and recommended optimization order in `work/now/latency-analysis.md`
+
 ## 2026-06-20 Lost Job Cleanup UI Fix
 
 - live `DELETE https://api.shadowgen.solofarm.ru/v1/jobs/bf1d86cd-3d11-4e2e-984d-82923566ce32` without `X-Admin-Token` returned `401 Invalid admin token`, proving the public API route is reachable and admin-protected

@@ -1,4 +1,5 @@
 import threading
+from threading import Lock
 
 import uvicorn
 
@@ -52,16 +53,28 @@ def build_worker_runtime(config: WorkerConfig):
         idle_heartbeat_interval_sec=config.worker_state_heartbeat_interval_sec,
     )
 
+    pipeline_cache: dict[str | None, MLCorePipelineAdapter] = {}
+    pipeline_cache_lock = Lock()
+
+    def get_pipeline_adapter() -> MLCorePipelineAdapter:
+        base_url = resolve_legacy_base_url(config, runtime)
+        with pipeline_cache_lock:
+            pipeline = pipeline_cache.get(base_url)
+            if pipeline is None:
+                pipeline_cache.clear()
+                pipeline = MLCorePipelineAdapter(
+                    base_url=base_url,
+                    timeout_sec=config.legacy_ml_timeout_sec,
+                    capabilities_refresh_interval_sec=config.capabilities_refresh_interval_sec,
+                )
+                pipeline_cache[base_url] = pipeline
+            return pipeline
+
     def use_case_factory() -> ProcessJobUseCase:
-        pipeline = MLCorePipelineAdapter(
-            base_url=resolve_legacy_base_url(config, runtime),
-            timeout_sec=config.legacy_ml_timeout_sec,
-            capabilities_refresh_interval_sec=config.capabilities_refresh_interval_sec,
-        )
         return ProcessJobUseCase(
             job_repository=runtime.job_repository,
             asset_store=runtime.asset_store,
-            pipeline=pipeline,
+            pipeline=get_pipeline_adapter(),
             observer=state_service,
             poll_interval_ms=config.poll_interval_ms,
             job_ttl_ms=config.job_ttl_ms,
