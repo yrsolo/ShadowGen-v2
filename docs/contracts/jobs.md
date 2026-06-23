@@ -31,6 +31,8 @@
 
 `JobRecord.trace` is a compact timeline for engineering diagnostics. It stores small metadata only, never image bytes or large ML payloads.
 
+Worker-side trace stages can be buffered during fast local work and persisted at job checkpoints rather than after every stage transition.
+
 Stage fields:
 
 - `name`
@@ -84,7 +86,7 @@ Normalization rule:
 Reuse behavior:
 
 - if a matching job is already `queued`, `running`, or `succeeded`, API returns that existing job instead of creating a new one
-- create-job responses include `cache_status` and `reused_existing_job` so the UI can distinguish a reused job from a newly queued one
+- create-job responses include `cache_status`, `reused_existing_job`, and the full initial `job` record so the UI can distinguish a reused job from a newly queued one without immediately fetching the job again
 - `queued` and `running` cache records are reused only while they are fresh; stale live records are ignored so a lost old job cannot trap new submissions forever
 - only `failed` or `canceled` jobs are eligible for a fresh retry with the same parameters
 

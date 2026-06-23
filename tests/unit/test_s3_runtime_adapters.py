@@ -22,6 +22,7 @@ class FakeS3Client:
     def __init__(self) -> None:
         self.objects: dict[tuple[str, str], dict] = {}
         self.list_calls = 0
+        self.get_calls_by_key: dict[str, int] = {}
 
     def put_object(self, Bucket: str, Key: str, Body: bytes, ContentType: str | None = None):
         payload = Body if isinstance(Body, bytes) else Body.encode("utf-8")
@@ -29,6 +30,7 @@ class FakeS3Client:
         return {"ETag": "fake"}
 
     def get_object(self, Bucket: str, Key: str):
+        self.get_calls_by_key[Key] = self.get_calls_by_key.get(Key, 0) + 1
         item = self.objects.get((Bucket, Key))
         if item is None:
             raise self.exceptions.NoSuchKey(Key)
@@ -80,6 +82,8 @@ def test_s3_backed_runtime_supports_shared_state(monkeypatch) -> None:
     source_hash = worker_runtime.asset_store.get_source_hash(asset_ref.asset_id)
     assert isinstance(source_hash, str)
     assert len(source_hash) == 64
+    metadata_key = f"shadowgen-v2-test/assets/meta/{asset_ref.asset_id}.json"
+    assert fake_client.get_calls_by_key[metadata_key] == 1
 
     job = JobRecord(
         job_id="job-1",

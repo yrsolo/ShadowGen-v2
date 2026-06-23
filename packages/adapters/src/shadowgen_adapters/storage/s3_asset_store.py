@@ -16,12 +16,18 @@ class S3AssetStore:
         self.client = client
         self.bucket = bucket
         self.prefix = prefix
+        self._metadata_cache: dict[str, dict] = {}
 
     def put_bytes(self, data: bytes, kind: AssetKind, mime_type: str) -> AssetRef:
         asset_id = f"{kind.value}-{uuid4()}"
         object_key = prefixed_key(self.prefix, f"assets/{kind.value}/{asset_id}")
         metadata_key = prefixed_key(self.prefix, f"assets/meta/{asset_id}.json")
         ref = AssetRef(asset_id=asset_id, kind=kind, mime_type=mime_type, url=None)
+        metadata = {
+            "asset": ref.model_dump(mode="json"),
+            "object_key": object_key,
+            "source_hash": hashlib.sha256(data).hexdigest(),
+        }
 
         self.client.put_object(
             Bucket=self.bucket,
@@ -32,15 +38,10 @@ class S3AssetStore:
         self.client.put_object(
             Bucket=self.bucket,
             Key=metadata_key,
-            Body=dump_json_bytes(
-                {
-                    "asset": ref.model_dump(mode="json"),
-                    "object_key": object_key,
-                    "source_hash": hashlib.sha256(data).hexdigest(),
-                }
-            ),
+            Body=dump_json_bytes(metadata),
             ContentType="application/json",
         )
+        self._metadata_cache[asset_id] = metadata
         return ref
 
     def get_bytes(self, asset_id: str) -> bytes:
@@ -70,8 +71,13 @@ class S3AssetStore:
         return hashlib.sha256(response["Body"].read()).hexdigest()
 
     def _get_metadata(self, asset_id: str) -> dict:
+        cached = self._metadata_cache.get(asset_id)
+        if cached is not None:
+            return cached
         response = self.client.get_object(
             Bucket=self.bucket,
             Key=prefixed_key(self.prefix, f"assets/meta/{asset_id}.json"),
         )
-        return json.loads(response["Body"].read().decode("utf-8"))
+        metadata = json.loads(response["Body"].read().decode("utf-8"))
+        self._metadata_cache[asset_id] = metadata
+        return metadata

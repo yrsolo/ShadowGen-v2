@@ -84,7 +84,7 @@ The live `ml_probe` cost was consistently about 180-237 ms. The worker now reuse
 The worker:
 
 - reads source asset metadata
-- reads source bytes, which reads metadata again first
+- reads source bytes, which previously read metadata again first
 - writes job JSON many times during trace updates
 - writes final asset bytes
 - writes final asset metadata
@@ -92,9 +92,13 @@ The worker:
 
 The measured `asset_bytes_loaded` is around 150-192 ms and `artifact_store` is around 184-401 ms. The gap between summed visible stage durations and worker duration also points to storage writes between stages.
 
+The S3 asset store now caches asset metadata inside one adapter instance, so `get_ref()` followed by `get_bytes()` no longer fetches `assets/meta/*.json` twice in the same worker process.
+
+Fast job trace transitions are now buffered and persisted at checkpoints instead of after every start/finish. A fast async success path now writes job metadata at claim, running start, async wait, and terminal success.
+
 ### 4. API create/get sequence
 
-The browser does `createJob()` and then immediately `getJob()`. The create route already has the job record, but the response only returns summary fields. Returning the `JobRecord` from create would remove one API call and one Object Storage job read on every miss.
+The browser used to call `createJob()` and then immediately `getJob()`. The create route already has the job record, so `CreateJobResponse` now includes the full initial `job` record. The web client uses it and falls back to the old immediate `getJob()` only when talking to an older API revision.
 
 ### 5. Browser polling
 
@@ -145,7 +149,7 @@ Risk: must handle runtime ML URL override changes cleanly.
 ### Stage 4: Reduce storage chatter in worker
 
 - Avoid duplicate source metadata read: `get_ref()` followed by `get_bytes()` currently re-reads metadata. Add an internal asset metadata object or a `get_bytes_for_ref()` style port method.
-- Buffer trace writes: write job state on externally meaningful transitions, and write the full final trace at completion/failure.
+- Buffer trace writes: write job state on externally meaningful transitions, and write the full final trace at completion/failure. Implemented for fast worker stages.
 - Keep worker runtime state as the live progress surface while the job is running.
 - Store final asset bytes and metadata in parallel, or remove the separate metadata read from the final content path by making final asset object keys derivable from asset IDs and carrying MIME type in job result.
 
@@ -155,7 +159,7 @@ Risk: fewer mid-stage updates in diagnostics unless worker state becomes the liv
 
 ### Stage 5: Reduce API/browser round trips
 
-- Return the full `JobRecord` in `CreateJobResponse`, or add `job` as an optional field, so the browser can skip the immediate `getJob()`.
+- Return the full `JobRecord` in `CreateJobResponse`, or add `job` as an optional field, so the browser can skip the immediate `getJob()`. Implemented.
 - Add a lightweight `/v1/jobs/{id}/status` response for polling if full job records become large.
 - Use `ETag`/`If-None-Match` or `updated_at` based conditional reads for polling.
 - Return direct immutable final artifact URLs or short-lived signed URLs in the job result to avoid proxying final images through the API.
@@ -258,8 +262,8 @@ Risk: VPS becomes part of the critical public path unless fallback is carefully 
 1. Fix measurement labels and add explicit backend overhead fields.
 2. Reduce/adapt `POLL_INTERVAL_MS`; this is now implemented as a 200 ms default.
 3. Reuse ML capability cache across jobs; this is now implemented for one adapter per effective ML URL.
-4. Return full job from create and remove immediate initial `getJob()`.
-5. Reduce worker Object Storage writes and duplicate source metadata reads.
+4. Return full job from create and remove immediate initial `getJob()`. Implemented.
+5. Reduce worker Object Storage writes and duplicate source metadata reads. Duplicate source metadata reads are now reduced by S3 metadata caching, and fast worker trace writes are now buffered to checkpoint writes.
 6. Add direct or signed final artifact URLs.
 7. Add VPS realtime completion channel with browser polling fallback.
 8. Add VPS wake signal if queue pickup still shows measurable delay.

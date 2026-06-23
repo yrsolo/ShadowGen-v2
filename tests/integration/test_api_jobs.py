@@ -63,6 +63,8 @@ def test_create_and_get_job() -> None:
     assert create_response.status_code == 200
 
     job_id = create_response.json()["job_id"]
+    assert create_response.json()["job"]["job_id"] == job_id
+    assert create_response.json()["job"]["status"] == "queued"
     get_response = client.get(f"/v1/jobs/{job_id}")
     assert get_response.status_code == 200
     assert get_response.json()["job"]["job_id"] == job_id

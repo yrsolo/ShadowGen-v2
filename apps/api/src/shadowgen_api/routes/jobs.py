@@ -38,6 +38,7 @@ def create_job(
         status=job.status,
         cache_status=job.cache_status,
         reused_existing_job=job.reused_existing_job,
+        job=job,
     )
 
 

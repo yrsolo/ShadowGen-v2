@@ -230,21 +230,21 @@ export default function HomePage() {
       }
 
       const getStartedAt = Date.now();
-      const currentJob = await getJob(createResponse.job_id);
-      timing.initial_get_job_ms = Date.now() - getStartedAt;
-      timing.cache_hit = currentJob.job.status === "succeeded";
-      setJob(currentJob.job);
+      const initialJob = createResponse.job ?? (await getJob(createResponse.job_id)).job;
+      timing.initial_get_job_ms = createResponse.job ? 0 : Date.now() - getStartedAt;
+      timing.cache_hit = initialJob.status === "succeeded";
+      setJob(initialJob);
       lastSubmittedShadowRef.current = shadow;
 
-      if (!["queued", "running"].includes(currentJob.job.status)) {
+      if (!["queued", "running"].includes(initialJob.status)) {
         const finishedAt = Date.now();
         timing.total_until_job_ms = finishedAt - startedAt;
         setLastRunElapsedMs(timing.total_until_job_ms);
         setProcessingStartedAt(null);
       }
 
-      if (currentJob.job.status === "succeeded" && currentJob.job.result?.images?.length) {
-        setLastCompletedJob(currentJob.job);
+      if (initialJob.status === "succeeded" && initialJob.result?.images?.length) {
+        setLastCompletedJob(initialJob);
         resultReadyAtRef.current = Date.now();
       }
 

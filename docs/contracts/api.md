@@ -14,6 +14,8 @@ Upload a source asset and receive an asset reference.
 
 Create a render job.
 
+The response includes the legacy summary fields (`job_id`, `status`, `cache_status`, and `reused_existing_job`) plus the full initial `job` record so clients do not need an immediate follow-up `GET /v1/jobs/{job_id}`.
+
 ### `GET /v1/jobs/{job_id}`
 
 Get job status and metadata.

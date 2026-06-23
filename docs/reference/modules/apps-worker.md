@@ -40,6 +40,7 @@ Not responsible for:
 Runtime note:
 
 - when `STATE_BACKEND=s3`, the worker still polls queue/config as needed, but `runtime/worker-state.json` is rewritten only on meaningful state changes or on the throttled idle heartbeat interval
+- job trace metadata is buffered through fast worker stages and persisted at checkpoints such as running start, async wait, terminal success, and terminal failure
 - the default idle heartbeat interval is 30 seconds; diagnostics mark worker state stale only after five minutes without a fresh heartbeat/probe
 - worker/core integration now uses a `probe -> submit -> poll -> cancel` boundary instead of a single blocking `render()` call
 - queue messages are acknowledged only after worker handling completes; failed handling is nacked so the queue can redeliver

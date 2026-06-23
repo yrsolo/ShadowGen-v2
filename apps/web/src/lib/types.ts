@@ -48,6 +48,7 @@ export interface CreateJobResponse {
   status: JobStatus;
   cache_status?: string | null;
   reused_existing_job: boolean;
+  job?: JobRecord | null;
 }
 
 export interface RenderResult {

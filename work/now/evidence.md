@@ -1,5 +1,31 @@
 # Evidence
 
+## 2026-06-23 Worker Job Write Buffering
+
+- buffered fast `ProcessJobUseCase` trace writes by removing intermediate `job_repository.update()` calls around `ml_probe`, `asset_bytes_loaded`, `ml_submit` start, and `artifact_store` start
+- kept persisted checkpoints for worker claim, running start, async wait, sync submit-before-complete, terminal success, terminal failure, missing asset failure, and terminal no-op
+- fast async success path now persists job metadata 4 times: claim, running start, async wait, and terminal success
+- final persisted job trace still contains `worker_claimed`, `asset_ref_loaded`, `ml_probe`, `asset_bytes_loaded`, `ml_submit`, `ml_poll`, `artifact_store`, and `completed`
+- added `tests/unit/test_process_job_write_buffering.py`
+- `python -m pytest tests/unit/test_process_job_write_buffering.py -q` -> `1 passed`
+- `python -m pytest tests/unit/test_process_job_failures.py tests/unit/test_ml_core_adapter.py tests/smoke/test_worker_process_job.py tests/unit/test_worker_runtime_composition.py tests/unit/test_worker_loop_resilience.py tests/integration/test_api_jobs.py tests/unit/test_s3_runtime_adapters.py -q` -> `22 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+
+## 2026-06-23 Create Response And S3 Metadata Latency Reduction
+
+- live diagnostics for job `66c8b721-c004-4590-be67-0ddaceb28510` showed `duration_ms=2540`, `ml_total_ms=236`, `ml_poll_ms=1317`, `ml_probe_ms=173`, `asset_bytes_ms=222`, and `artifact_store_ms=218`
+- the same job had `created_at=11:35:03.555597Z`, `started_at=11:35:04.406925Z`, and `finished_at=11:35:06.947085Z`, so queue/API/pre-start time was about 851 ms and worker time was about 2540 ms
+- `ml_poll_ms - ml_total_ms` was still about 1081 ms, which matches an old one-second worker polling cadence; the repository code is already at `POLL_INTERVAL_MS=200`, so the live worker likely still needs rebuild/restart or is running an older image/process
+- `CreateJobResponse` now includes the full initial `job` record while keeping legacy summary fields
+- the web client uses `createResponse.job` to avoid the immediate follow-up `GET /v1/jobs/{job_id}` when the API supports the new response
+- the web client still falls back to the old `GET /v1/jobs/{job_id}` path when talking to an older API revision
+- `S3AssetStore` now caches asset metadata in the adapter instance, avoiding a repeated `assets/meta/*.json` read for `get_ref()` followed by `get_bytes()` or `get_bytes()` followed by `get_source_hash()`
+- `python -m pytest tests/integration/test_api_jobs.py tests/unit/test_s3_runtime_adapters.py tests/unit/test_process_job_failures.py tests/smoke/test_worker_process_job.py -q` -> `11 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with CRLF warnings only
+
 ## 2026-06-23 Faster ML Polling And Warm Capability Cache
 
 - changed the worker/application default async ML polling interval from `1000` ms to `200` ms

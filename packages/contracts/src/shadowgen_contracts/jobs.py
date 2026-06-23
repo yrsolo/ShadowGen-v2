@@ -16,13 +16,6 @@ class CreateJobRequest(BaseModel):
     render: RenderRequest
 
 
-class CreateJobResponse(BaseModel):
-    job_id: str
-    status: JobStatus
-    cache_status: str | None = None
-    reused_existing_job: bool = False
-
-
 class JobTraceStage(BaseModel):
     name: str
     status: Literal["running", "succeeded", "failed", "skipped"]
@@ -53,6 +46,14 @@ class JobRecord(BaseModel):
     trace: list[JobTraceStage] = Field(default_factory=list)
     cache_status: str | None = None
     reused_existing_job: bool = False
+
+
+class CreateJobResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    cache_status: str | None = None
+    reused_existing_job: bool = False
+    job: JobRecord | None = None
 
 
 class GetJobResponse(BaseModel):

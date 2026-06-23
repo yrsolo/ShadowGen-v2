@@ -75,7 +75,6 @@ class ProcessJobUseCase:
 
         try:
             self._start_stage(job, "ml_probe", "Checking worker-side ML capabilities.")
-            self.job_repository.update(job)
             capabilities = self.pipeline.probe()
             self._emit_capabilities(capabilities)
             self._finish_stage(
@@ -84,13 +83,10 @@ class ProcessJobUseCase:
                 "succeeded",
                 message=f"Mode: {'async' if capabilities.async_enabled else 'sync'}; degraded: {capabilities.degraded}.",
             )
-            self.job_repository.update(job)
 
             self._start_stage(job, "asset_bytes_loaded", "Loading source image bytes.")
-            self.job_repository.update(job)
             source_bytes = self.asset_store.get_bytes(job.request.source_asset_id)
             self._finish_stage(job, "asset_bytes_loaded", "succeeded", message=f"Loaded {len(source_bytes)} bytes.")
-            self.job_repository.update(job)
 
             context = PipelineContext(
                 request=job.request,
@@ -99,7 +95,6 @@ class ProcessJobUseCase:
                 request_id=job.job_id,
             )
             self._start_stage(job, "ml_submit", "Submitting render request to ML.")
-            self.job_repository.update(job)
             submission = self.pipeline.submit(context)
             self._finish_stage(job, "ml_submit", "succeeded", message=_submission_message(submission))
             in_flight = WorkerInFlightJob(
@@ -114,6 +109,7 @@ class ProcessJobUseCase:
             self._emit_job_submitted(in_flight)
 
             if submission.result is not None:
+                self.job_repository.update(job)
                 processed = self._complete_job(job, submission.result)
                 self._emit_job_finished(processed)
                 return processed
@@ -169,7 +165,6 @@ class ProcessJobUseCase:
 
     def _complete_job(self, job: JobRecord, pipeline_output) -> JobRecord:
         self._start_stage(job, "artifact_store", "Storing generated artifacts.")
-        self.job_repository.update(job)
         images = []
         debug_images = []
         for artifact in pipeline_output.artifacts:
