@@ -7,6 +7,77 @@ export type JobStatus =
 
 export type ShadowModel = "v1-gan" | "v2-diff";
 
+export type RealtimeTransport = "sse";
+
+export type JobRealtimeEventType =
+  | "connected"
+  | "job_queued"
+  | "job_running"
+  | "job_worker_seen"
+  | "job_succeeded"
+  | "job_failed"
+  | "job_canceled"
+  | "keepalive"
+  | "fallback_required";
+
+export type JobRealtimeEventSource = "api" | "worker" | "vps";
+
+export interface RealtimeSubscription {
+  transport: RealtimeTransport;
+  base_url: string;
+  path: string;
+  token: string;
+  expires_at: string;
+  fallback_poll_ms: number;
+}
+
+export interface JobTimingMetrics {
+  queue_wait_ms?: number | null;
+  pre_start_worker_ms?: number | null;
+  worker_duration_ms?: number | null;
+  ml_total_ms?: number | null;
+  worker_overhead_ms?: number | null;
+  ml_poll_overhead_ms?: number | null;
+}
+
+export interface JobRealtimeEvent {
+  event_version: "1";
+  event_id: string;
+  event_type: JobRealtimeEventType;
+  job_id: string;
+  status?: JobStatus | null;
+  occurred_at: string;
+  updated_at?: string | null;
+  source: JobRealtimeEventSource;
+  sequence?: number | null;
+  cache_status?: string | null;
+  reused_existing_job?: boolean | null;
+  worker_id?: string | null;
+  result_available: boolean;
+  error_code?: string | null;
+  error_message?: string | null;
+  duration_ms?: number | null;
+}
+
+export interface JobQueuedSignal {
+  message_version: "1";
+  event_id: string;
+  job_id: string;
+  status: "queued";
+  cache_status?: string | null;
+  reused_existing_job: boolean;
+  queued_at: string;
+  idempotency_key: string;
+}
+
+export interface JobWakeCommand {
+  message_version: "1";
+  message_type: "job_wake";
+  command_id: string;
+  job_id: string;
+  queued_at: string;
+}
+
 export interface AssetRef {
   asset_id: string;
   kind: "source" | "final" | "debug";
@@ -49,6 +120,8 @@ export interface CreateJobResponse {
   cache_status?: string | null;
   reused_existing_job: boolean;
   job?: JobRecord | null;
+  timing?: JobTimingMetrics | null;
+  realtime?: RealtimeSubscription | null;
 }
 
 export interface RenderResult {
@@ -101,6 +174,8 @@ export interface JobTraceStage {
 
 export interface GetJobResponse {
   job: JobRecord;
+  timing?: JobTimingMetrics | null;
+  realtime?: RealtimeSubscription | null;
 }
 
 export interface GetJobResultResponse {

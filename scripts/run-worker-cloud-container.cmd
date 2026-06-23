@@ -74,10 +74,8 @@ if defined LEGACY_ML_BASE_URL (
   )
 )
 
-for /f %%i in ('""%DOCKER_EXE%" ps -aq --filter "name=^shadowgen-worker$""') do (
-  echo [ShadowGen] Removing previous worker container...
-  "%DOCKER_EXE%" rm -f %%i >nul 2>&1
-)
+echo [ShadowGen] Removing previous worker container if it exists...
+"%DOCKER_EXE%" rm -f shadowgen-worker >nul 2>&1
 
 echo [ShadowGen] Running detached worker container with restart policy.
 echo [ShadowGen] Stable mode: no repository mount, no Docker socket mount.

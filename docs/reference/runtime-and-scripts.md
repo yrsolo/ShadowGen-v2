@@ -38,6 +38,17 @@ Important keys:
   - `WORKER_CONTROL_TOKEN`
   - `WORKER_STATE_HEARTBEAT_INTERVAL_SEC`
   - `WORKER_SELF_MANAGE_ENABLED`
+- realtime accelerator:
+  - `VPS_ACCELERATOR_ENABLED`
+  - `VPS_ACCELERATOR_URL`
+  - `VPS_INTERNAL_TOKEN`
+  - `WORKER_ID`
+  - `WORKER_VPS_TOKEN`
+  - `VPS_REALTIME_SIGNING_SECRET`
+  - `VPS_NOTIFY_TIMEOUT_MS`
+  - `VPS_REALTIME_TOKEN_TTL_SEC`
+  - `VPS_REALTIME_FALLBACK_POLL_MS`
+  - `VPS_EVENT_TIMEOUT_MS`
 
 ## Main Scripts
 
@@ -61,6 +72,7 @@ Important keys:
 ### Cloud deployment helper
 
 - `scripts/deploy-yc-shadowgen.cmd`
+- `scripts/deploy-realtime-vps.ps1`
 
 ## Runtime Stores
 
@@ -78,6 +90,8 @@ The active wiring is built in:
 
 - `apps/web` and `apps/api` are the public cloud-facing services
 - `apps/worker` remains local and owns business-job orchestration
+- `apps/realtime` is optional; when enabled it accelerates browser observation through SSE and accepts best-effort API/worker lifecycle events
+- realtime failures must not fail job creation or worker execution
 - the worker discovers ML-core sync/async capabilities at runtime
 - `POLL_INTERVAL_MS` defaults to 200 ms because the ML service is expected to be local to the worker host; raise it if the ML endpoint becomes remote or rate-sensitive
 - `CAPABILITIES_REFRESH_INTERVAL_SEC` defaults to 300 seconds; lower it only when ML-core capabilities change often during operation

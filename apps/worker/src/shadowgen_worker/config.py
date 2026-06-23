@@ -39,6 +39,12 @@ class WorkerConfig(BaseSettings):
     worker_workspace_mount_dest: str = "/workspace"
     worker_control_host_port: int = 8081
     worker_self_manage_enabled: bool = False
+    vps_accelerator_enabled: bool = False
+    vps_accelerator_url: str | None = None
+    worker_id: str = "local-worker"
+    worker_vps_token: str | None = None
+    vps_realtime_signing_secret: str | None = None
+    vps_event_timeout_ms: int = 300
 
     model_config = SettingsConfigDict(
         env_file=".env.shadowgen",

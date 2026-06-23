@@ -26,6 +26,13 @@ class ApiConfig(BaseSettings):
     legacy_ml_base_url: str | None = None
     legacy_ml_timeout_sec: float = 120.0
     admin_api_token: str = "change-me-shadowgen-admin"
+    vps_accelerator_enabled: bool = False
+    vps_accelerator_url: str | None = None
+    vps_internal_token: str | None = None
+    vps_realtime_signing_secret: str | None = None
+    vps_notify_timeout_ms: int = 300
+    vps_realtime_token_ttl_sec: int = 300
+    vps_realtime_fallback_poll_ms: int = 350
 
     model_config = SettingsConfigDict(
         env_file=".env.shadowgen",

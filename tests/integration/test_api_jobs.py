@@ -1,12 +1,24 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
 from fastapi.testclient import TestClient
 
+from shadowgen_adapters.realtime import NullRealtimeAccelerator
 from shadowgen_adapters.runtime.local_state import reset_local_state
-from shadowgen_api.deps import get_config, get_runtime
+from shadowgen_api.deps import get_config, get_realtime_accelerator, get_runtime
 from shadowgen_api.main import app
+from shadowgen_contracts import RealtimeSubscription
 
 
 client = TestClient(app)
 ADMIN_HEADERS = {"X-Admin-Token": "change-me-shadowgen-admin"}
+
+
+@pytest.fixture(autouse=True)
+def disable_realtime_accelerator_by_default():
+    app.dependency_overrides[get_realtime_accelerator] = lambda: NullRealtimeAccelerator()
+    yield
+    app.dependency_overrides.pop(get_realtime_accelerator, None)
 
 
 def test_healthcheck_returns_ok() -> None:
@@ -65,10 +77,14 @@ def test_create_and_get_job() -> None:
     job_id = create_response.json()["job_id"]
     assert create_response.json()["job"]["job_id"] == job_id
     assert create_response.json()["job"]["status"] == "queued"
+    assert create_response.json()["timing"]["queue_wait_ms"] is None
+    assert create_response.json()["realtime"] is None
     get_response = client.get(f"/v1/jobs/{job_id}")
     assert get_response.status_code == 200
     assert get_response.json()["job"]["job_id"] == job_id
     assert get_response.json()["job"]["status"] == "queued"
+    assert get_response.json()["timing"]["queue_wait_ms"] is None
+    assert get_response.json()["realtime"] is None
 
     diagnostics_response = client.get("/v1/system/diagnostics")
     assert diagnostics_response.status_code == 200
@@ -115,6 +131,67 @@ def test_create_job_reuses_cached_job_for_same_image_and_params() -> None:
     assert second.status_code == 200
 
     assert second.json()["job_id"] == first.json()["job_id"]
+
+
+def test_create_job_realtime_notify_failure_is_best_effort() -> None:
+    reset_local_state()
+    get_config.cache_clear()
+    get_runtime.cache_clear()
+
+    class FailingRealtimeAccelerator:
+        def subscription_for_job(self, job_id: str):
+            return RealtimeSubscription(
+                base_url="https://rt.shadowgen.solofarm.ru",
+                path=f"/v1/realtime/jobs/{job_id}/events",
+                token="token",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            )
+
+        def notify_job_queued(self, job):
+            raise RuntimeError("vps unavailable")
+
+    app.dependency_overrides[get_realtime_accelerator] = lambda: FailingRealtimeAccelerator()
+    try:
+        upload_response = client.post(
+            "/v1/assets",
+            files={"file": ("source.png", b"realtime-image", "image/png")},
+        )
+        asset_id = upload_response.json()["asset"]["asset_id"]
+
+        create_response = client.post(
+            "/v1/jobs",
+            json={
+                "render": {
+                    "source_asset_id": asset_id,
+                    "pipeline_version": "legacy-black-box-v1",
+                    "shadow": {
+                        "angle_deg": 45,
+                        "softness": 0.5,
+                        "opacity": 0.6,
+                        "reflection": 0.0,
+                    },
+                    "background": {
+                        "mode": "solid",
+                        "color_hex": "#FFFFFF",
+                    },
+                    "output": {
+                        "format": "png",
+                        "width": None,
+                        "height": None,
+                        "return_debug": False,
+                    },
+                }
+            },
+        )
+
+        assert create_response.status_code == 200
+        assert create_response.json()["realtime"]["transport"] == "sse"
+        job_id = create_response.json()["job_id"]
+        get_response = client.get(f"/v1/jobs/{job_id}")
+        assert get_response.status_code == 200
+        assert get_response.json()["realtime"]["path"] == f"/v1/realtime/jobs/{job_id}/events"
+    finally:
+        app.dependency_overrides.pop(get_realtime_accelerator, None)
 
 
 def test_admin_can_clear_job_request_cache() -> None:

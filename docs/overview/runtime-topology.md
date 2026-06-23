@@ -83,3 +83,17 @@ The worker container mode is self-contained:
 - the container runs detached with `--restart unless-stopped`
 - process restart remains available
 - git update/rebuild/recreate actions are disabled
+
+## Optional Realtime VPS Service
+
+`apps/realtime` is a deployable accelerator service for realtime browser events.
+
+Current status:
+
+- it is deployed on the VPS behind `https://rt.shadowgen.solofarm.ru`
+- it exposes health, internal queued-event ingestion, internal worker event ingestion, and public SSE job streams
+- API notifications, browser SSE, and worker lifecycle event publishing are optional and controlled by `VPS_ACCELERATOR_ENABLED`
+- worker wake hints are not implemented yet
+- the durable runtime remains Object Storage plus YMQ
+
+If the realtime service is down, the current browser/API/YMQ/worker path is unaffected.

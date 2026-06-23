@@ -15,6 +15,7 @@ Then:
 
 - [Quick Start](overview/quick-start.md)
 - [Permanent Worker Host](overview/permanent-worker-host.md)
+- [Realtime VPS Service](overview/realtime-vps.md)
 - [Runtime Topology](overview/runtime-topology.md)
 - [Repository Map](overview/repository-map.md)
 
@@ -31,6 +32,7 @@ Then:
 
 - [API Contract](contracts/api.md)
 - [Jobs Contract](contracts/jobs.md)
+- [Realtime Contract](contracts/realtime.md)
 - [ML Black Box Contract](contracts/ml-black-box.md)
 - [New ML Service Contract](contracts/new-ml-service.md)
 

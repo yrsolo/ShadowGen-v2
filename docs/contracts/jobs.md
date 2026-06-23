@@ -27,6 +27,26 @@
 - `cache_status`
 - `reused_existing_job`
 
+## Response-Only Fields
+
+`POST /v1/jobs` and `GET /v1/jobs/{job_id}` may include response-only metadata next to the authoritative `job` record:
+
+- `timing` - derived latency metrics computed from existing job timestamps, trace stages, and ML metrics
+- `realtime` - optional subscription metadata for a future realtime accelerator
+
+These fields are not the source of truth for job state. Persisted job records remain represented by `JobRecord`.
+
+Current `timing` fields:
+
+- `queue_wait_ms` - `worker_claimed.started_at - job.created_at`
+- `pre_start_worker_ms` - `job.started_at - worker_claimed.started_at`
+- `worker_duration_ms` - `job.finished_at - job.started_at`
+- `ml_total_ms` - `job.result.metrics.total_ms`
+- `worker_overhead_ms` - `worker_duration_ms - ml_total_ms`
+- `ml_poll_overhead_ms` - `ml_poll.duration_ms - ml_total_ms`
+
+`realtime` is optional and can be absent or `null`. Clients must continue to work through API polling.
+
 ## Diagnostic Trace
 
 `JobRecord.trace` is a compact timeline for engineering diagnostics. It stores small metadata only, never image bytes or large ML payloads.

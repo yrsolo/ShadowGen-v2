@@ -40,12 +40,10 @@ Top-level runtime modules:
 
 - `apps/api` - FastAPI transport and composition layer
 - `apps/web` - Next.js UI for user flow and engineering diagnostics
-- `apps/worker` - job execution loop and local worker control plane
 - `apps/worker` - job execution loop, ML-core orchestration, and local worker control plane
 - `packages/contracts` - shared DTOs and public/internal contracts
 - `packages/application` - use cases and ports
 - `packages/domain` - entities, statuses, exceptions, value objects
-- `packages/pipeline` - pipeline context, interfaces, and output model
 - `packages/pipeline` - worker-facing ML-core submission, polling, and output model
 - `packages/adapters` - storage, queue, runtime stores, and legacy/new ML adapters
 - `packages/schema` - placeholder area for future standalone schema artifacts
@@ -90,6 +88,7 @@ Worker control endpoints:
 
 - web: `https://shadowgen.solofarm.ru`
 - api health: `https://api.shadowgen.solofarm.ru/health`
+- realtime health: `https://rt.shadowgen.solofarm.ru/health`
 
 ## Main API Surface
 
@@ -111,6 +110,7 @@ Start here:
 - [Documentation Index](docs/README.md)
 - [Quick Start](docs/overview/quick-start.md)
 - [Permanent Worker Host](docs/overview/permanent-worker-host.md)
+- [Realtime VPS Service](docs/overview/realtime-vps.md)
 - [Runtime Topology](docs/overview/runtime-topology.md)
 - [Repository Map](docs/overview/repository-map.md)
 
@@ -123,5 +123,6 @@ Contracts:
 
 - [API Contract](docs/contracts/api.md)
 - [Jobs Contract](docs/contracts/jobs.md)
+- [Realtime Contract](docs/contracts/realtime.md)
 - [ML Black Box Contract](docs/contracts/ml-black-box.md)
 - [New ML Service Contract](docs/contracts/new-ml-service.md)

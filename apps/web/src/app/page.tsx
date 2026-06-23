@@ -19,8 +19,10 @@ import {
   uploadAsset
 } from "../lib/api-client";
 import {
+  JobRealtimeEvent,
   JobRecord,
   LocalRuntimeConfig,
+  RealtimeSubscription,
   ShadowModel,
   SystemDiagnosticsResponse,
   WorkerControlAction
@@ -43,6 +45,9 @@ type ClientTiming = {
   total_until_job_ms?: number;
   total_until_image_ms?: number;
   image_after_job_ms?: number;
+  realtime_events?: number;
+  observed_via?: "polling" | "realtime";
+  realtime_error?: string;
   cache_hit?: boolean;
   reused_upload?: boolean;
   reused_completed_job?: boolean;
@@ -68,6 +73,8 @@ function buildTimingRows(timing: ClientTiming | null): Array<[string, string]> {
     ["initial get", formatDurationMs(timing.initial_get_job_ms)],
     ["polls", String(timing.polls ?? 0)],
     ["last poll", formatDurationMs(timing.last_poll_ms)],
+    ["realtime events", String(timing.realtime_events ?? 0)],
+    ["observed via", timing.observed_via ?? "polling"],
     ["cache", timing.cache_hit ? "hit" : "miss"],
     ["job visible", formatDurationMs(timing.total_until_job_ms)],
     ["image visible", formatDurationMs(timing.total_until_image_ms)],
@@ -100,6 +107,7 @@ export default function HomePage() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [lastRunElapsedMs, setLastRunElapsedMs] = useState<number | null>(null);
   const [lastClientTiming, setLastClientTiming] = useState<ClientTiming | null>(null);
+  const [realtimeSubscription, setRealtimeSubscription] = useState<RealtimeSubscription | null>(null);
   const lastSubmittedShadowRef = useRef<ShadowDraft | null>(null);
   const currentRunStartedAtRef = useRef<number | null>(null);
   const resultReadyAtRef = useRef<number | null>(null);
@@ -181,6 +189,7 @@ export default function HomePage() {
     setProcessingStartedAt(startedAt);
     setElapsedMs(0);
     setLastClientTiming(null);
+    setRealtimeSubscription(null);
 
     try {
       const fingerprint = getFileFingerprint(file);
@@ -231,6 +240,7 @@ export default function HomePage() {
 
       const getStartedAt = Date.now();
       const initialJob = createResponse.job ?? (await getJob(createResponse.job_id)).job;
+      setRealtimeSubscription(createResponse.realtime ?? null);
       timing.initial_get_job_ms = createResponse.job ? 0 : Date.now() - getStartedAt;
       timing.cache_hit = initialJob.status === "succeeded";
       setJob(initialJob);
@@ -354,6 +364,9 @@ export default function HomePage() {
           last_poll_ms: pollElapsedMs
         }));
         setJob(updated.job);
+        if (updated.realtime) {
+          setRealtimeSubscription(updated.realtime);
+        }
 
         if (updated.job.status === "succeeded" && updated.job.result?.images?.length) {
           setLastCompletedJob(updated.job);
@@ -364,6 +377,7 @@ export default function HomePage() {
             setLastRunElapsedMs(totalUntilJobMs);
             setLastClientTiming((current) => ({
               ...(current ?? {}),
+              observed_via: "polling",
               total_until_job_ms: totalUntilJobMs
             }));
           }
@@ -371,6 +385,10 @@ export default function HomePage() {
         } else if (updated.job.status === "failed" || updated.job.status === "canceled") {
           if (processingStartedAt) {
             setLastRunElapsedMs(Date.now() - processingStartedAt);
+            setLastClientTiming((current) => ({
+              ...(current ?? {}),
+              observed_via: "polling"
+            }));
           }
           setProcessingStartedAt(null);
         }
@@ -381,6 +399,62 @@ export default function HomePage() {
 
     return () => window.clearInterval(timer);
   }, [job, processingStartedAt]);
+
+  useEffect(() => {
+    if (!job || !isJobStillProcessing(job) || !realtimeSubscription) {
+      return;
+    }
+
+    const params = new URLSearchParams({ token: realtimeSubscription.token });
+    const source = new EventSource(`${realtimeSubscription.base_url}${realtimeSubscription.path}?${params.toString()}`);
+    const handleEvent = async (message: MessageEvent<string>) => {
+      try {
+        const event = JSON.parse(message.data) as JobRealtimeEvent;
+        setLastClientTiming((current) => ({
+          ...(current ?? {}),
+          realtime_events: (current?.realtime_events ?? 0) + 1
+        }));
+        if (!event.result_available || !["job_succeeded", "job_failed", "job_canceled"].includes(event.event_type)) {
+          return;
+        }
+        const updated = await getJob(event.job_id);
+        setJob(updated.job);
+        const finishedAt = Date.now();
+        if (updated.job.status === "succeeded" && updated.job.result?.images?.length) {
+          setLastCompletedJob(updated.job);
+          resultReadyAtRef.current = finishedAt;
+        }
+        if (processingStartedAt) {
+          const totalUntilJobMs = finishedAt - processingStartedAt;
+          setLastRunElapsedMs(totalUntilJobMs);
+          setLastClientTiming((current) => ({
+            ...(current ?? {}),
+            observed_via: "realtime",
+            total_until_job_ms: totalUntilJobMs
+          }));
+        }
+        setProcessingStartedAt(null);
+        source.close();
+      } catch (cause) {
+        setLastClientTiming((current) => ({
+          ...(current ?? {}),
+          realtime_error: cause instanceof Error ? cause.message : "realtime parse/fetch failed"
+        }));
+      }
+    };
+
+    source.addEventListener("job_succeeded", handleEvent);
+    source.addEventListener("job_failed", handleEvent);
+    source.addEventListener("job_canceled", handleEvent);
+    source.onerror = () => {
+      setLastClientTiming((current) => ({
+        ...(current ?? {}),
+        realtime_error: "stream closed"
+      }));
+      source.close();
+    };
+    return () => source.close();
+  }, [job?.job_id, job?.status, realtimeSubscription, processingStartedAt]);
 
   useEffect(() => {
     if (!processingStartedAt) {

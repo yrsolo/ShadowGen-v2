@@ -579,3 +579,150 @@ Checks:
 - `cmd /c npm run build` in `apps/web` -> passed
 - `python -m pytest -q` -> `52 passed, 1 skipped`
 - `powershell -ExecutionPolicy Bypass -File scripts\docs-check.ps1` -> passed
+
+## 2026-06-23 VPS Accelerator Architecture Planning
+
+Planned an optional VPS acceleration layer for the current serverless/YMQ/Object Storage runtime.
+
+Updated planning artifacts:
+
+- `work/now/current-task.md` now describes VPS-assisted acceleration planning and non-goals.
+- `work/now/plan.md` now tracks the architecture planning deliverables and checks.
+- `work/now/vps-accelerator-architecture-plan.md` defines the target architecture, fallback model, contracts, phases, repository tasks, and rollback plan.
+
+Key planning decisions:
+
+- the first VPS phase is an accelerator, not the source of truth
+- Object Storage and YMQ remain the durable fallback path
+- browser SSE is used to reduce terminal status observation delay
+- worker wake hints can reduce idle pickup delay, but MVP execution still comes from YMQ delivery
+- direct job-id execution is out of scope until a durable claim/lease contract exists
+- API and worker interactions with the VPS are best-effort and short-timeout
+- terminal worker events should be emitted only after durable job state has been updated
+
+Checks:
+
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only for touched markdown files
+- trailing whitespace check for `work/now/vps-accelerator-architecture-plan.md` -> passed
+
+## 2026-06-23 VPS Accelerator Phase 1 Contracts
+
+Implemented the first no-runtime-dependency phase of the VPS accelerator plan.
+
+Updated behavior:
+
+- `packages/contracts/src/shadowgen_contracts/realtime.py` defines shared realtime DTOs for subscription metadata, job events, queued signals, worker messages, wake commands, and accepted responses.
+- `CreateJobResponse` and `GetJobResponse` now include optional response-only `timing` and `realtime` fields.
+- `derive_job_timing_metrics(job)` computes backend latency metrics from existing authoritative `JobRecord` timestamps, trace stages, and ML metrics.
+- `apps/api` now includes derived `timing` in create/get job responses and leaves `realtime` as `null` until a future notifier/subscription service is implemented.
+- `apps/web/src/lib/types.ts` mirrors the new optional response fields and realtime DTOs.
+- `docs/contracts/realtime.md`, `docs/contracts/jobs.md`, `docs/contracts/api.md`, root README, and docs index document the new contracts.
+- `work/now/vps-accelerator-architecture-plan.md` marks Phase 1 contracts/timing as implemented while keeping VPS runtime phases pending.
+
+Boundary notes:
+
+- no VPS app was created in this phase
+- API and worker do not call any VPS endpoint yet
+- browser SSE is not opened yet
+- executable worker jobs still come only from YMQ
+- timing metrics are response-only derived values and are not persisted as `JobRecord` source of truth
+
+Checks:
+
+- `python -m pytest tests/unit/test_realtime_contracts.py tests/unit/test_architecture_boundaries.py tests/integration/test_api_jobs.py -q` -> `13 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only
+- trailing whitespace check for new realtime contract/test/docs files -> passed
+- `python -m pytest -q` -> `58 passed, 1 skipped`
+
+## 2026-06-23 VPS Realtime Service Skeleton And Deploy
+
+Implemented and deployed the standalone realtime accelerator service.
+
+Updated behavior:
+
+- `apps/realtime` is a FastAPI service with config, CORS, auth helpers, in-memory event buffering, health route, internal queued-event ingestion, and public SSE job stream endpoint.
+- `GET /health` returns service health plus the number of jobs currently represented in the in-memory event buffer.
+- `POST /internal/v1/jobs/queued` requires bearer `VPS_INTERNAL_TOKEN`, converts a queued signal into a `job_queued` realtime event, and deduplicates repeated `event_id` values.
+- `GET /v1/realtime/jobs/{job_id}/events` validates origin and a job-scoped signed token before streaming SSE events.
+- `apps/realtime/Dockerfile` builds the service from the shared monorepo packages.
+- `scripts/deploy-realtime-vps.ps1` reads local `.env` `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, and `SSH_KEY`, uploads a minimal source bundle, creates server-local `.env.realtime` secrets if missing, builds `shadowgen-realtime:latest`, and restarts container `shadowgen-realtime`.
+- deploy packaging was reduced from a full workspace archive to the minimal Python/Docker build inputs; remote Docker build context is now about `786 KB`.
+
+Deployment result:
+
+- deployed to `yrsolo@89.169.132.198:/opt/shadowgen-realtime`
+- container: `shadowgen-realtime`
+- image: `shadowgen-realtime:latest`
+- port mapping: `0.0.0.0:8082->8082/tcp`
+- public health: `http://89.169.132.198:8082/health` -> `{"status":"ok","service":"shadowgen-realtime","jobs_with_events":0}`
+
+Boundary notes:
+
+- API does not notify the realtime service yet.
+- Web does not open SSE yet.
+- Worker does not publish events or consume wake hints yet.
+- Object Storage and YMQ remain the only durable production path.
+- VPS secrets live in `/opt/shadowgen-realtime/.env.realtime` and were not copied into the repository.
+
+Checks:
+
+- `python -m pytest tests/unit/test_realtime_contracts.py tests/unit/test_realtime_app.py tests/unit/test_architecture_boundaries.py -q` -> `12 passed`
+- `python -m pytest -q` -> `62 passed, 1 skipped`
+- `docker build -f apps/realtime/Dockerfile -t shadowgen-realtime:local .` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only
+- `powershell -NoProfile -Command "[scriptblock]::Create((Get-Content -Path 'scripts/deploy-realtime-vps.ps1' -Raw)) | Out-Null; Write-Output 'deploy script parse ok'"` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/deploy-realtime-vps.ps1` -> passed
+- `curl.exe -fsS http://89.169.132.198:8082/health` -> passed
+- `ssh -i $HOME/.ssh/id_ed25519 yrsolo@89.169.132.198 "docker ps --filter name=shadowgen-realtime --format '{{.Names}} {{.Status}} {{.Ports}}'"` -> container is running
+
+## 2026-06-23 VPS Realtime Production Integration
+
+Completed the first production integration of the VPS realtime accelerator.
+
+Updated behavior:
+
+- DNS record `rt.shadowgen.solofarm.ru` points to the VPS.
+- nginx and Let's Encrypt TLS terminate HTTPS for `https://rt.shadowgen.solofarm.ru`.
+- VPS realtime service now exposes:
+  - `GET /health`
+  - `POST /internal/v1/jobs/queued` for API queued-job events
+  - `POST /internal/v1/jobs/events` for worker lifecycle events
+  - `GET /v1/realtime/jobs/{job_id}/events` for browser SSE
+- API can generate job-scoped realtime subscription metadata and publish queued-job events best-effort after durable job creation.
+- Web opens SSE when the API returns subscription metadata and keeps API polling as fallback.
+- Worker publishes best-effort `job_worker_seen`, `job_succeeded`, and `job_failed` events after the normal durable state path runs.
+- `.env*` examples document API, worker, and realtime tokens/settings.
+- Local `.env.shadowgen` contains the required copied secrets for deployment/runtime use and remains gitignored.
+- Worker wake hints are still not implemented; executable work continues to come only from YMQ.
+
+Deployment result:
+
+- realtime domain health: `https://rt.shadowgen.solofarm.ru/health` -> `{"status":"ok","service":"shadowgen-realtime","jobs_with_events":0}`
+- API health: `https://api.shadowgen.solofarm.ru/health` -> `{"status":"ok"}`
+- Web root: `https://shadowgen.solofarm.ru` -> HTTP 200
+- API image pushed: `cr.yandex/crpal081a5mju2k2amfn/shadowgen-api:20260623-rt1`
+- Web image pushed: `cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260623-rt1`
+- API/Web serverless container revisions deployed and `scripts\deploy-yc-shadowgen.cmd` completed.
+- Local `shadowgen-worker` container restarted and reports Docker status `Up`.
+- Worker container env check:
+  - `VPS_ACCELERATOR_ENABLED=true`
+  - `VPS_ACCELERATOR_URL=https://rt.shadowgen.solofarm.ru`
+  - `WORKER_ID=local-gpu-1`
+  - `WORKER_VPS_TOKEN=set`
+
+Checks:
+
+- `python -m pytest tests/integration/test_api_jobs.py tests/unit/test_realtime_app.py tests/unit/test_realtime_contracts.py tests/unit/test_worker_runtime_composition.py tests/unit/test_architecture_boundaries.py -q` -> `20 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `python -m pytest -q` -> `64 passed, 1 skipped`
+- `powershell -ExecutionPolicy Bypass -File scripts/deploy-realtime-vps.ps1` -> passed
+- `curl.exe -fsS https://rt.shadowgen.solofarm.ru/health` -> passed
+- `curl.exe -fsS https://api.shadowgen.solofarm.ru/health` -> passed
+- `curl.exe -I -L --max-time 30 https://shadowgen.solofarm.ru` -> HTTP 200
+- `docker build -f apps/realtime/Dockerfile -t shadowgen-realtime:local .` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only

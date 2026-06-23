@@ -28,6 +28,7 @@ dev = [
 pythonpath = [
   ".",
   "apps/api/src",
+  "apps/realtime/src",
   "apps/worker/src",
   "packages/contracts/src",
   "packages/domain/src",
@@ -45,6 +46,7 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = [
   "apps/api/src",
+  "apps/realtime/src",
   "apps/worker/src",
   "packages/contracts/src",
   "packages/domain/src",

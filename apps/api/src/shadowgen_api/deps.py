@@ -4,6 +4,7 @@ from hmac import compare_digest
 from fastapi import Header, HTTPException
 
 from shadowgen_adapters.runtime import build_runtime_adapters
+from shadowgen_adapters.realtime import HttpRealtimeAccelerator, NullRealtimeAccelerator
 from shadowgen_application.use_cases import (
     GetJobResultUseCase,
     GetRuntimeConfigUseCase,
@@ -59,6 +60,26 @@ def get_create_job_use_case() -> CreateJobUseCase:
         job_repository=runtime.job_repository,
         job_queue=runtime.job_queue,
         asset_store=runtime.asset_store,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_realtime_accelerator():
+    config = get_config()
+    if (
+        not config.vps_accelerator_enabled
+        or not config.vps_accelerator_url
+        or not config.vps_internal_token
+        or not config.vps_realtime_signing_secret
+    ):
+        return NullRealtimeAccelerator()
+    return HttpRealtimeAccelerator(
+        base_url=config.vps_accelerator_url,
+        internal_token=config.vps_internal_token,
+        signing_secret=config.vps_realtime_signing_secret,
+        timeout_ms=config.vps_notify_timeout_ms,
+        token_ttl_sec=config.vps_realtime_token_ttl_sec,
+        fallback_poll_ms=config.vps_realtime_fallback_poll_ms,
     )
 
 

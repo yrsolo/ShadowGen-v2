@@ -4,6 +4,7 @@ from threading import Lock
 import uvicorn
 
 from shadowgen_adapters.ml_core import MLCorePipelineAdapter
+from shadowgen_adapters.realtime import HttpRealtimeAccelerator, NullRealtimeAccelerator
 from shadowgen_adapters.runtime import build_runtime_adapters
 from shadowgen_application.use_cases.process_job import ProcessJobUseCase
 
@@ -14,6 +15,7 @@ from shadowgen_worker.control_loop import WorkerControlLoop
 from shadowgen_worker.executor import JobExecutor
 from shadowgen_worker.loop import WorkerLoop
 from shadowgen_worker.metadata import collect_worker_version_info
+from shadowgen_worker.realtime_observer import RealtimePublishingObserver
 from shadowgen_worker.state import WorkerStateService
 
 
@@ -55,6 +57,21 @@ def build_worker_runtime(config: WorkerConfig):
 
     pipeline_cache: dict[str | None, MLCorePipelineAdapter] = {}
     pipeline_cache_lock = Lock()
+    realtime_accelerator = (
+        HttpRealtimeAccelerator(
+            base_url=config.vps_accelerator_url,
+            internal_token=config.worker_vps_token,
+            signing_secret=config.vps_realtime_signing_secret or "worker-no-browser-token-signing",
+            timeout_ms=config.vps_event_timeout_ms,
+        )
+        if config.vps_accelerator_enabled and config.vps_accelerator_url and config.worker_vps_token
+        else NullRealtimeAccelerator()
+    )
+    observer = (
+        RealtimePublishingObserver(state_service, realtime_accelerator, worker_id=config.worker_id)
+        if config.vps_accelerator_enabled and config.vps_accelerator_url and config.worker_vps_token
+        else state_service
+    )
 
     def get_pipeline_adapter() -> MLCorePipelineAdapter:
         base_url = resolve_legacy_base_url(config, runtime)
@@ -75,7 +92,7 @@ def build_worker_runtime(config: WorkerConfig):
             job_repository=runtime.job_repository,
             asset_store=runtime.asset_store,
             pipeline=get_pipeline_adapter(),
-            observer=state_service,
+            observer=observer,
             poll_interval_ms=config.poll_interval_ms,
             job_ttl_ms=config.job_ttl_ms,
             max_retries=config.max_retries,
