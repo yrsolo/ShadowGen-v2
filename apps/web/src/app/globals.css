@@ -273,6 +273,7 @@ a {
 
 .file-trigger,
 .preview-action-button {
+  appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -280,6 +281,8 @@ a {
   padding: 0 16px;
   border-radius: 12px;
   border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
   cursor: pointer;
 }
 
@@ -289,6 +292,29 @@ a {
 
 .preview-action-button {
   min-height: 44px;
+}
+
+.camera-panel {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  align-content: center;
+}
+
+.camera-preview {
+  width: 100%;
+  height: min(70%, 420px);
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #05070b;
+}
+
+.camera-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .compact-file-name {
@@ -642,6 +668,11 @@ a {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.kv strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .kv dt,
 .kv dd {
   margin: 0;
@@ -795,6 +826,17 @@ a {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.worker-life-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.worker-life-copy span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .worker-life-dot {
   width: 10px;
   height: 10px;
@@ -806,6 +848,30 @@ a {
 .worker-life.ok .worker-life-dot {
   background: var(--success);
   box-shadow: 0 0 0 4px rgba(56, 211, 159, 0.12);
+}
+
+.worker-life.warn .worker-life-dot {
+  background: var(--accent-2);
+  box-shadow: 0 0 0 4px rgba(255, 209, 102, 0.12);
+}
+
+.diagnostic-notes {
+  display: grid;
+  gap: 8px;
+}
+
+.diagnostic-notes div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.diagnostic-notes span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .ui-switch-row {

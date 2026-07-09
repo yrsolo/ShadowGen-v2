@@ -35,6 +35,8 @@ class WorkerLoop:
         self._in_flight: dict[Future, _InFlightDelivery] = {}
         self._job_futures: dict[str, Future] = {}
         self.wake_event = wake_event
+        self.last_tick_at_monotonic: float | None = None
+        self.last_error: str | None = None
 
     def tick(self) -> bool:
         processed = self._drain_finished()
@@ -65,7 +67,16 @@ class WorkerLoop:
     def run_forever(self):
         self.state_service.boot()
         while True:
-            if not self.tick():
+            self.last_tick_at_monotonic = time.monotonic()
+            try:
+                processed = self.tick()
+            except Exception as exc:
+                self.last_error = str(exc)
+                time.sleep(self.poll_interval_sec)
+                continue
+            self.last_error = None
+            self.last_tick_at_monotonic = time.monotonic()
+            if not processed:
                 self._sleep_until_poll_or_wake()
 
     def _sleep_until_poll_or_wake(self) -> None:

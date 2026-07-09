@@ -1,4 +1,7 @@
+import os
+import sys
 import threading
+import time
 from threading import Event
 from threading import Lock
 
@@ -19,6 +22,45 @@ from shadowgen_worker.metadata import collect_worker_version_info
 from shadowgen_worker.realtime_observer import RealtimePublishingObserver
 from shadowgen_worker.realtime_wake import RealtimeWakeListener
 from shadowgen_worker.state import WorkerStateService
+
+
+def _loop_health(loop: object) -> dict:
+    last_tick_at = getattr(loop, "last_tick_at_monotonic", None)
+    last_tick_age_sec = None
+    if last_tick_at is not None:
+        last_tick_age_sec = round(time.monotonic() - last_tick_at, 3)
+    return {
+        "last_tick_age_sec": last_tick_age_sec,
+        "last_error": getattr(loop, "last_error", None),
+    }
+
+
+def _background_health(threads: dict[str, threading.Thread], loops: dict[str, object]) -> dict:
+    details = {
+        name: {
+            "alive": thread.is_alive(),
+            **_loop_health(loops[name]),
+        }
+        for name, thread in threads.items()
+        if name in loops
+    }
+    critical_names = ("worker_loop", "control_loop")
+    ok = all(details.get(name, {}).get("alive") is True for name in critical_names)
+    return {
+        "ok": ok,
+        "threads": details,
+    }
+
+
+def _restart_if_critical_thread_stops(threads: dict[str, threading.Thread]) -> None:
+    while True:
+        time.sleep(5.0)
+        for name in ("worker_loop", "control_loop"):
+            thread = threads.get(name)
+            if thread is None or thread.is_alive():
+                continue
+            print(f"[ShadowGen Worker] critical thread stopped: {name}; restarting process", flush=True)
+            os.execv(sys.executable, [sys.executable, "-m", "shadowgen_worker.main"])
 
 
 def resolve_legacy_base_url(config: WorkerConfig, runtime) -> str | None:
@@ -123,11 +165,18 @@ def build_worker_runtime(config: WorkerConfig):
         executor=action_executor,
         poll_interval_sec=config.control_poll_interval_sec,
     )
+    background_threads: dict[str, threading.Thread] = {}
+    background_loops: dict[str, object] = {
+        "worker_loop": worker_loop,
+        "control_loop": control_loop,
+    }
     control_app = create_worker_control_app(
         config=config,
         runtime=runtime,
         state_service=state_service,
         version_info=version_info,
+        direct_action_executor=action_executor,
+        background_health=lambda: _background_health(background_threads, background_loops),
     )
     wake_listener = (
         RealtimeWakeListener(
@@ -141,7 +190,9 @@ def build_worker_runtime(config: WorkerConfig):
         if wake_event is not None and config.vps_accelerator_url and config.worker_vps_token
         else None
     )
-    return runtime, state_service, worker_loop, control_loop, control_app, wake_listener
+    if wake_listener is not None:
+        background_loops["wake_listener"] = wake_listener
+    return runtime, state_service, worker_loop, control_loop, control_app, wake_listener, background_threads, background_loops
 
 
 def main():
@@ -156,12 +207,21 @@ def main():
         f"control_port={config.worker_control_port}",
         flush=True,
     )
-    _, state_service, worker_loop, control_loop, control_app, wake_listener = build_worker_runtime(config)
+    _, state_service, worker_loop, control_loop, control_app, wake_listener, background_threads, _background_loops = build_worker_runtime(config)
     state_service.boot()
-    threading.Thread(target=worker_loop.run_forever, daemon=True).start()
-    threading.Thread(target=control_loop.run_forever, daemon=True).start()
+    background_threads["worker_loop"] = threading.Thread(target=worker_loop.run_forever, name="shadowgen-worker-loop", daemon=True)
+    background_threads["control_loop"] = threading.Thread(target=control_loop.run_forever, name="shadowgen-control-loop", daemon=True)
+    background_threads["worker_loop"].start()
+    background_threads["control_loop"].start()
     if wake_listener is not None:
-        threading.Thread(target=wake_listener.run_forever, daemon=True).start()
+        background_threads["wake_listener"] = threading.Thread(target=wake_listener.run_forever, name="shadowgen-wake-listener", daemon=True)
+        background_threads["wake_listener"].start()
+    threading.Thread(
+        target=_restart_if_critical_thread_stops,
+        args=(background_threads,),
+        name="shadowgen-loop-supervisor",
+        daemon=True,
+    ).start()
     uvicorn.run(control_app, host=config.worker_control_host, port=config.worker_control_port)
 
 

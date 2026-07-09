@@ -2,35 +2,32 @@
 
 ## Task
 
-Complete the first production integration of the VPS realtime accelerator.
+Diagnose and fix queued jobs not being processed.
 
 ## Goal
 
-Put the realtime service behind a production HTTPS domain, connect API queued notifications, connect browser SSE fallback, connect worker lifecycle event publishing, add worker wake hints, and preserve the old YMQ/Object Storage path as fallback.
+Restore the production-shaped render path so newly queued jobs are claimed by the local worker, processed by the local ML service, and completed in shared state. Make the diagnostics clearer when the worker cannot reach Object Storage, YMQ, Docker, or its own control port.
 
 ## Scope Of This Stage
 
-- configure DNS/TLS for `https://rt.shadowgen.solofarm.ru`
-- keep `apps/realtime` deployed as `shadowgen-realtime` under `/opt/shadowgen-realtime`
-- add shared realtime signing and HTTP accelerator adapter
-- wire API best-effort queued notifications and job-scoped subscription metadata
-- wire Web SSE observation with API polling fallback
-- wire worker best-effort lifecycle event publishing
-- wire worker outbound wake stream and idle-loop wake event
-- deploy updated realtime/API/Web/worker pieces
-- document runtime settings and verification evidence
+- verify worker container/control plane status
+- verify local ML health from host and worker-side network perspective
+- verify API diagnostics and the latest queued job state
+- identify whether the blocker is Docker runtime, S3/Object Storage connectivity, YMQ, worker process, or ML
+- restart or reconfigure local runtime if needed
+- improve diagnostic messages where they are currently too vague
+- record evidence and run targeted checks
 
 ## Non-Goals
 
-- do not move any durable state from Object Storage/YMQ to the VPS
-- do not expose worker control endpoints through the realtime service
-- do not print or commit generated realtime/API/worker tokens
+- do not change ML model behavior
+- do not replace YMQ/Object Storage architecture
+- do not rotate or print secrets
 
 ## Risks
 
-- generated VPS secrets must remain only in server-local `.env.realtime`
-- local `.env.shadowgen` may contain copied deployment secrets but remains gitignored
-- public SSE must not reveal job results or asset bytes
-- internal endpoints must fail closed when tokens are missing or wrong
-- API and worker must treat realtime failures as best-effort
-- worker wake hints must not bypass YMQ or execute a job id directly
+- stuck queued jobs may be old enough to need manual retry/requeue after worker recovery
+- Docker Desktop may show stale UI state while the CLI/control pipe is unavailable
+- Object Storage or YMQ endpoint connectivity failures can make the worker appear alive locally but stale in cloud diagnostics
+- the current remote worker can keep serving its HTTP control UI even when its background worker/control loops are no longer processing queue messages or control actions
+- the already-running remote container needs one manual restart/redeploy before the new loop-health and direct-restart behavior can protect it

@@ -31,7 +31,7 @@ def test_worker_runtime_reuses_ml_adapter_until_effective_url_changes(monkeypatc
         worker_workspace_mount_dest=".",
     )
 
-    runtime, _state_service, worker_loop, _control_loop, _control_app, _wake_listener = worker_main.build_worker_runtime(config)
+    runtime, _state_service, worker_loop, _control_loop, _control_app, _wake_listener, _threads, _loops = worker_main.build_worker_runtime(config)
 
     first = worker_loop.executor.process_job_use_case_factory()
     second = worker_loop.executor.process_job_use_case_factory()

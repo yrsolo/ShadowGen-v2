@@ -108,3 +108,81 @@ def test_worker_control_app_serves_status_and_accepts_tokenized_action() -> None
     updated_status = client.get("/api/status").json()
     assert updated_status["runtime_config"]["legacy_ml_base_url"] == "http://new-ml:9001"
     assert updated_status["effective_legacy_base_url"] == "http://new-ml:9001"
+
+
+def test_worker_control_health_reports_background_loop_failure() -> None:
+    runtime = build_runtime_adapters(
+        state_backend="memory",
+        queue_backend="memory",
+        state_dir=".shadowgen-test",
+    )
+    config = WorkerConfig(worker_control_token="secret-token")
+    state_service = WorkerStateService(
+        worker_state_store=runtime.worker_state_store,
+        runtime_config_store=runtime.runtime_config_store,
+        config_legacy_base_url="http://ml:9001",
+        version_info=WorkerVersionInfo(git_branch="main", git_commit="abc123"),
+    )
+    state_service.boot()
+
+    app = create_worker_control_app(
+        config=config,
+        runtime=runtime,
+        state_service=state_service,
+        version_info=WorkerVersionInfo(git_branch="main", git_commit="abc123"),
+        background_health=lambda: {
+            "ok": False,
+            "threads": {
+                "worker_loop": {"alive": False, "last_tick_age_sec": 120.0, "last_error": "stopped"},
+                "control_loop": {"alive": True, "last_tick_age_sec": 1.0, "last_error": None},
+            },
+        },
+    )
+    client = TestClient(app)
+
+    health = client.get("/health")
+    assert health.status_code == 503
+    assert health.json()["detail"]["threads"]["worker_loop"]["alive"] is False
+
+    status = client.get("/api/status")
+    assert status.status_code == 200
+    assert status.json()["process"]["ok"] is False
+
+
+def test_worker_control_can_execute_local_action_directly() -> None:
+    runtime = build_runtime_adapters(
+        state_backend="memory",
+        queue_backend="memory",
+        state_dir=".shadowgen-test",
+    )
+    config = WorkerConfig(worker_control_token="secret-token")
+    state_service = WorkerStateService(
+        worker_state_store=runtime.worker_state_store,
+        runtime_config_store=runtime.runtime_config_store,
+        config_legacy_base_url="http://ml:9001",
+        version_info=WorkerVersionInfo(git_branch="main", git_commit="abc123"),
+    )
+    state_service.boot()
+
+    class DirectExecutor:
+        def execute(self, action):
+            action.status = "succeeded"
+            runtime.worker_action_store.update(action)
+            return action
+
+    app = create_worker_control_app(
+        config=config,
+        runtime=runtime,
+        state_service=state_service,
+        version_info=WorkerVersionInfo(git_branch="main", git_commit="abc123"),
+        direct_action_executor=DirectExecutor(),
+    )
+    client = TestClient(app)
+
+    accepted = client.post(
+        "/api/actions/restart",
+        json={"action": "diagnostic_probe"},
+        headers={"X-Worker-Token": "secret-token"},
+    )
+    assert accepted.status_code == 200
+    assert accepted.json()["command"]["status"] == "succeeded"

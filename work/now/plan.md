@@ -2,34 +2,29 @@
 
 ## Steps
 
-1. Configure DNS, nginx, and TLS for `rt.shadowgen.solofarm.ru`.
-2. Update and redeploy `apps/realtime` with API queued-event and worker lifecycle-event ingestion.
-3. Wire `apps/api` to publish queued events and return job-scoped SSE subscription metadata.
-4. Wire `apps/web` to consume SSE with API polling fallback and timing diagnostics.
-5. Wire `apps/worker` to publish best-effort worker-seen and terminal lifecycle events.
-6. Wire worker wake hints through outbound SSE and a local worker loop wake event.
-7. Deploy API/Web container revisions and restart the local worker container with realtime env.
-8. Update docs, env examples, and evidence.
-9. Run focused/full Python tests, Web build, docs check, and diff checks.
+1. Done - checked Docker, worker control port, ML health, API health, diagnostics, and latest stuck job.
+2. Done - identified the current blocker as a stale/dead remote worker background loop while its HTTP control plane still answers.
+3. Pending manual remote action - restart/redeploy the worker container on `192.168.1.6` so the fixed worker code can run there.
+4. Done - improved diagnostics so future failures distinguish heartbeat freshness, worker control probe, ML probe, current job, and last errors.
+5. Done - targeted tests/build/docs checks passed and evidence was recorded.
 
 ## Checks
 
-- `python -m pytest tests/integration/test_api_jobs.py tests/unit/test_realtime_app.py tests/unit/test_realtime_contracts.py tests/unit/test_worker_runtime_composition.py tests/unit/test_architecture_boundaries.py -q`
-- `python -m pytest -q`
-- `docker build -f apps/realtime/Dockerfile -t shadowgen-realtime:local .`
-- `cmd /c npm run build` in `apps/web`
-- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1`
+- local worker control `/api/status`
+- local ML `/health`
+- public API `/health`
+- public diagnostics endpoint
+- targeted Python tests for diagnostics/runtime changes
 - `git diff --check`
-- `powershell -ExecutionPolicy Bypass -File scripts/deploy-realtime-vps.ps1`
-- public health checks for realtime/API/Web
-- worker container env/status check
-- wake endpoint and worker listener checks
+
+## Current Runtime Follow-Up
+
+- Manually restart or redeploy the worker container on `192.168.1.6`.
+- After restart, check `http://192.168.1.6:8081/health`; the fixed version should include `process.threads.worker_loop` and `process.threads.control_loop`.
+- Re-check the queued job list; the worker should claim the pending YMQ message instead of staying idle.
 
 ## Deliverables
 
-- `apps/realtime`
-- `apps/realtime/Dockerfile`
-- `scripts/deploy-realtime-vps.ps1`
-- realtime adapter/signing code
-- API/Web/worker integration code
-- runtime docs and deployment evidence
+- recovered worker/runtime if possible
+- diagnostics improvements if code changes are needed
+- updated `work/now/evidence.md`

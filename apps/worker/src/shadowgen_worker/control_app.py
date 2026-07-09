@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from html import escape
 
@@ -39,7 +40,15 @@ def _job_preview_url(job) -> str | None:
     return f"/api/jobs/{job.job_id}/preview" if _has_preview(job) else None
 
 
-def create_worker_control_app(*, config, runtime, state_service, version_info) -> FastAPI:
+def create_worker_control_app(
+    *,
+    config,
+    runtime,
+    state_service,
+    version_info,
+    direct_action_executor=None,
+    background_health: Callable[[], dict] | None = None,
+) -> FastAPI:
     app = FastAPI(title="ShadowGen Worker Control", version="0.1.0")
     create_action = CreateWorkerActionUseCase(worker_action_store=runtime.worker_action_store)
     update_runtime_config = UpdateRuntimeConfigUseCase(runtime_config_store=runtime.runtime_config_store)
@@ -108,6 +117,7 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
             "recent_actions": actions,
             "version": version_info.model_dump(mode="json"),
             "effective_legacy_base_url": state.effective_legacy_base_url or state_service.effective_legacy_base_url(),
+            "process": background_health() if background_health is not None else None,
             "self_management": {
                 "enabled": config.worker_self_manage_enabled,
                 "mode": "self-managed" if config.worker_self_manage_enabled else "self-contained",
@@ -121,7 +131,12 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
 
     @app.get("/health")
     def health() -> dict:
-        return {"status": "ok"}
+        if background_health is None:
+            return {"status": "ok"}
+        details = background_health()
+        if not details.get("ok", False):
+            raise HTTPException(status_code=503, detail=details)
+        return {"status": "ok", "process": details}
 
     @app.get("/api/status")
     def api_status() -> dict:
@@ -172,18 +187,24 @@ def create_worker_control_app(*, config, runtime, state_service, version_info) -
     def api_restart(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
         require_token(x_worker_token)
         command = create_action.execute(action=payload.action, requested_by="local-ui", validation_marker="local-token")
+        if direct_action_executor is not None:
+            command = direct_action_executor.execute(command)
         return {"command": command.model_dump(mode="json")}
 
     @app.post("/api/actions/update")
     def api_update(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
         require_token(x_worker_token)
         command = create_action.execute(action=payload.action, requested_by="local-ui", validation_marker="local-token")
+        if direct_action_executor is not None:
+            command = direct_action_executor.execute(command)
         return {"command": command.model_dump(mode="json")}
 
     @app.post("/api/actions/clear-override")
     def api_clear_override(payload: CreateWorkerActionRequest, x_worker_token: str | None = Header(default=None)) -> dict:
         require_token(x_worker_token)
         command = create_action.execute(action=payload.action, requested_by="local-ui", validation_marker="local-token")
+        if direct_action_executor is not None:
+            command = direct_action_executor.execute(command)
         return {"command": command.model_dump(mode="json")}
 
     @app.get("/", response_class=HTMLResponse)

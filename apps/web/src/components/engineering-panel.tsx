@@ -128,6 +128,89 @@ function formatAge(ageSec: number): string {
   return `${Math.floor(ageSec / 3600)}h ${Math.floor((ageSec % 3600) / 60)}m`;
 }
 
+type WorkerDiagnostics = SystemDiagnosticsResponse["worker"];
+type WorkerRuntimeState = NonNullable<WorkerDiagnostics["runtime_state"]>;
+type WorkerDiagnosticProbe = NonNullable<WorkerRuntimeState["last_worker_probe"]>;
+
+function formatAgeValue(ageSec?: number | null): string {
+  return ageSec == null ? "n/a" : formatAge(ageSec);
+}
+
+function formatProbeSummary(probe?: WorkerDiagnosticProbe | null): string {
+  if (!probe) {
+    return "never";
+  }
+  const latency = probe.latency_ms == null ? "n/a" : `${probe.latency_ms} ms`;
+  return `${probe.ok ? "ok" : "failed"} / ${latency}`;
+}
+
+function formatProbeDetails(probe?: WorkerDiagnosticProbe | null): string {
+  if (!probe) {
+    return "No probe has been recorded yet.";
+  }
+  const parts = [
+    `checked ${formatDateTime(probe.checked_at)}`,
+    probe.target_url ? `target ${probe.target_url}` : null,
+    probe.mode ? `mode ${probe.mode}` : null,
+    probe.error ? `error ${probe.error}` : null
+  ].filter(Boolean);
+  return parts.join(" / ");
+}
+
+function getWorkerHealth(worker: WorkerDiagnostics): { tone: "ok" | "bad" | "warn"; label: string; detail: string } {
+  const state = worker.runtime_state;
+  const heartbeatAge = formatAgeValue(worker.heartbeat_age_sec);
+  const heartbeatAt = state?.updated_at ? formatDateTime(state.updated_at) : "no heartbeat";
+
+  if (!state?.updated_at) {
+    return {
+      tone: "bad",
+      label: "No worker heartbeat",
+      detail: "The API has no worker runtime state in shared storage."
+    };
+  }
+  if (worker.heartbeat_is_stale === true) {
+    return {
+      tone: "bad",
+      label: "Worker heartbeat stale",
+      detail: `Last heartbeat ${heartbeatAt}; age ${heartbeatAge}.`
+    };
+  }
+  if (state.last_worker_probe?.ok === false) {
+    return {
+      tone: "bad",
+      label: "Worker control probe failed",
+      detail: formatProbeDetails(state.last_worker_probe)
+    };
+  }
+  if (state.last_ml_probe?.ok === false) {
+    return {
+      tone: "bad",
+      label: "ML probe failed",
+      detail: formatProbeDetails(state.last_ml_probe)
+    };
+  }
+  if (state.capability_refresh_error || worker.capability_refresh_error) {
+    return {
+      tone: "warn",
+      label: "Worker fresh, capabilities stale",
+      detail: state.capability_refresh_error ?? worker.capability_refresh_error ?? "Capability refresh failed."
+    };
+  }
+  if (state.last_submit_error || state.last_poll_error || state.last_error) {
+    return {
+      tone: "warn",
+      label: "Worker fresh, last job had errors",
+      detail: state.last_submit_error ?? state.last_poll_error ?? state.last_error ?? "Last job error is present."
+    };
+  }
+  return {
+    tone: "ok",
+    label: worker.in_flight_count > 0 ? "Worker processing" : "Worker fresh",
+    detail: `Last heartbeat ${heartbeatAt}; age ${heartbeatAge}.`
+  };
+}
+
 function LostJobCard({
   item,
   busy,
@@ -487,14 +570,14 @@ export function EngineeringPanel({
               <div className="stack">
                 <strong>Worker</strong>
                 {(() => {
-                  const stale = diagnostics.worker.heartbeat_is_stale ?? true;
-                  const workerProbeFailed = diagnostics.worker.runtime_state?.last_worker_probe?.ok === false;
-                  const alive = !stale && !workerProbeFailed;
+                  const health = getWorkerHealth(diagnostics.worker);
                   return (
-                    <div className={`worker-life ${alive ? "ok" : "bad"}`}>
+                    <div className={`worker-life ${health.tone}`}>
                       <span className="worker-life-dot" />
-                      <strong>{alive ? "Worker fresh" : "Worker stale/probe failed"}</strong>
-                      <span>{diagnostics.worker.runtime_state?.updated_at ? formatDateTime(diagnostics.worker.runtime_state.updated_at) : "no heartbeat"}</span>
+                      <div className="worker-life-copy">
+                        <strong>{health.label}</strong>
+                        <span>{health.detail}</span>
+                      </div>
                     </div>
                   );
                 })()}
@@ -509,14 +592,26 @@ export function EngineeringPanel({
                   <div><span className="muted">Capabilities refreshed</span><strong>{diagnostics.worker.capabilities_refreshed_at ?? "n/a"}</strong></div>
                   <div><span className="muted">In-flight jobs</span><strong>{diagnostics.worker.in_flight_count}</strong></div>
                   <div><span className="muted">Fallback active</span><strong>{diagnostics.worker.runtime_state?.transition_fallback_active == null ? "unknown" : String(diagnostics.worker.runtime_state.transition_fallback_active)}</strong></div>
+                  <div><span className="muted">Current job</span><strong>{diagnostics.worker.runtime_state?.current_job_id ?? "n/a"}</strong></div>
                   <div><span className="muted">Last job</span><strong>{diagnostics.worker.runtime_state?.last_job_id ?? "n/a"}</strong></div>
+                  <div><span className="muted">Last completed job</span><strong>{diagnostics.worker.runtime_state?.last_completed_job_id ?? "n/a"}</strong></div>
                   <div><span className="muted">Last duration</span><strong>{diagnostics.worker.runtime_state?.last_completed_duration_ms == null ? "n/a" : `${diagnostics.worker.runtime_state.last_completed_duration_ms} ms`}</strong></div>
-                  <div><span className="muted">Heartbeat age</span><strong>{diagnostics.worker.heartbeat_age_sec == null ? "n/a" : `${diagnostics.worker.heartbeat_age_sec}s`}</strong></div>
+                  <div><span className="muted">Last heartbeat</span><strong>{formatDateTime(diagnostics.worker.runtime_state?.updated_at)}</strong></div>
+                  <div><span className="muted">Heartbeat age</span><strong>{formatAgeValue(diagnostics.worker.heartbeat_age_sec)}</strong></div>
                   <div><span className="muted">Heartbeat stale</span><strong>{diagnostics.worker.heartbeat_is_stale == null ? "unknown" : String(diagnostics.worker.heartbeat_is_stale)}</strong></div>
-                  <div><span className="muted">Last worker probe</span><strong>{diagnostics.worker.runtime_state?.last_worker_probe ? formatDateTime(diagnostics.worker.runtime_state.last_worker_probe.checked_at) : "n/a"}</strong></div>
-                  <div><span className="muted">Last ML probe</span><strong>{diagnostics.worker.runtime_state?.last_ml_probe ? `${diagnostics.worker.runtime_state.last_ml_probe.ok ? "ok" : "failed"} / ${diagnostics.worker.runtime_state.last_ml_probe.latency_ms ?? "n/a"} ms` : "n/a"}</strong></div>
+                  <div><span className="muted">Worker probe</span><strong>{formatProbeSummary(diagnostics.worker.runtime_state?.last_worker_probe)}</strong></div>
+                  <div><span className="muted">ML probe</span><strong>{formatProbeSummary(diagnostics.worker.runtime_state?.last_ml_probe)}</strong></div>
                   <div><span className="muted">Failed jobs</span><strong>{diagnostics.worker.failed_jobs_count}</strong></div>
                 </div>
+                <div className="diagnostic-notes">
+                  <div><strong>Worker probe</strong><span>{formatProbeDetails(diagnostics.worker.runtime_state?.last_worker_probe)}</span></div>
+                  <div><strong>ML probe</strong><span>{formatProbeDetails(diagnostics.worker.runtime_state?.last_ml_probe)}</span></div>
+                </div>
+                {diagnostics.worker.runtime_state?.last_worker_probe?.error ? (
+                  <div className="error-box">
+                    Last worker probe: {diagnostics.worker.runtime_state.last_worker_probe.error}
+                  </div>
+                ) : null}
                 {diagnostics.worker.runtime_state?.last_ml_probe?.error ? (
                   <div className="error-box">
                     Last ML probe: {diagnostics.worker.runtime_state.last_ml_probe.error}

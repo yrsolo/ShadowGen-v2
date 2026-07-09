@@ -1,5 +1,25 @@
 # Evidence
 
+## 2026-07-09 Worker Background Loop Liveness Fix
+
+- live ML service on `http://192.168.1.6:9001/health` returned `status=ok`, `async_enabled=true`, and `accepting_jobs=true`
+- live worker control on `http://192.168.1.6:8081/api/status` was reachable, but it reported shared runtime state rather than proving the local background loops were healthy
+- queued job `c2cd3554-35c0-4503-896e-8b174bef540f` eventually succeeded after `worker_claimed` lag of about 12m48s and `worker_duration_ms=6212`, indicating the blocker was queue pickup/worker liveness rather than ML execution
+- a new `diagnostic_probe` posted directly to `http://192.168.1.6:8081/api/actions/restart` stayed `queued`, proving the old worker process had a live HTTP control plane while its background `control_loop` was not processing actions
+- local duplicate worker containers were stopped after the remote-host clarification, so the intended active worker/ML host remains `192.168.1.6`
+- `WorkerLoop` and `WorkerControlLoop` now keep running after transient tick exceptions and expose `last_tick_age_sec` plus `last_error`
+- worker control `/health` now returns HTTP 503 when critical background loops are not alive instead of reporting only uvicorn liveness
+- worker control `/api/status` now includes a `process` block with local background thread health
+- local worker control actions now execute directly through the in-process action executor when called through the worker control API, so a future `restart_worker_process` does not depend on a separate healthy `control_loop`
+- Engineering diagnostics now separates worker heartbeat, worker control probe, ML probe, current job, last completed job, and probe details instead of collapsing them into `Worker stale/probe failed`
+
+Checks:
+
+- `python -m pytest tests\unit\test_worker_control_app.py tests\unit\test_worker_runtime_composition.py tests\unit\test_worker_loop_resilience.py -q` -> `8 passed`
+- `cmd /c npm run build` in `apps/web` -> passed
+- `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only
+
 ## 2026-06-23 Warm Probe And Upload Payload Reduction
 
 - live screenshots after polling changes showed `duration_ms=936`, `ml_total_ms=241`, `ml_probe=122`, `asset_bytes_loaded=113`, `ml_submit=52`, `ml_poll=360`, and `artifact_store=123`; this made non-poll overhead the next target
@@ -770,4 +790,56 @@ Checks:
 - `curl.exe -I -L --max-time 30 https://shadowgen.solofarm.ru` -> HTTP 200
 - `docker build -f apps/realtime/Dockerfile -t shadowgen-realtime:local .` -> passed
 - `powershell -ExecutionPolicy Bypass -File scripts/docs-check.ps1` -> passed
+- `git diff --check` -> passed with LF-to-CRLF warnings only
+
+## 2026-06-24 Telegram Camera Button Fix
+
+Fixed the web upload camera action for Telegram WebView behavior where the HTML file input `capture` hint opens the photo picker instead of the camera.
+
+Updated behavior:
+
+- `Use camera` now first opens an in-app camera capture flow through `navigator.mediaDevices.getUserMedia`.
+- Captured frames are converted to a normal JPEG `File`, so the existing upload pipeline remains unchanged.
+- The old `capture="environment"` file input remains as fallback when WebRTC camera access is unavailable or denied.
+- `Upload image` still opens the regular image picker and is separate from the camera action.
+
+Deployment result:
+
+- Web image built and pushed: `cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera1`
+- pushed digest: `sha256:a4eef2c1fa895e04d854aa01e33f49a88bd775568dc08a510994a547c672c5ff`
+- active web revision: `bbajajhfbkto9bg7bg2k`
+- public web check: `https://shadowgen.solofarm.ru` -> HTTP 200
+
+Checks:
+
+- `cmd /c npm run build` in `apps/web` -> passed
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera1 .` -> passed
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera1` -> passed
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera1 ...` -> active
+- `git diff --check` -> passed with LF-to-CRLF warnings only
+
+## 2026-06-24 Telegram Camera Inline Preview Fix
+
+Follow-up fix after Telegram Mini App testing showed the camera button opened a separate dark panel and the upload button inherited dark browser button text.
+
+Updated behavior:
+
+- The camera preview now renders inside the same `Source preview` frame where the selected photo appears.
+- `video.srcObject` is attached in a React effect after the `<video>` element exists, avoiding the first-click black/incomplete preview race.
+- Upload/camera buttons now explicitly inherit the app text color and font instead of browser button defaults.
+- The external camera panel below the preview was removed.
+
+Deployment result:
+
+- Web image built and pushed: `cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera2`
+- pushed digest: `sha256:3ea001f39cbeae3dab9ee21d8202c9231b504f7b499b0504056908975c72615c`
+- active web revision: `bbaiudptb0vdfuki5pk0`
+- public web check: `https://shadowgen.solofarm.ru` -> HTTP 200
+
+Checks:
+
+- `cmd /c npm run build` in `apps/web` -> passed
+- `docker build --build-arg NEXT_PUBLIC_API_BASE=https://api.shadowgen.solofarm.ru -f apps/web/Dockerfile -t cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera2 .` -> passed
+- `docker push cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera2` -> passed
+- `yc serverless container revision deploy --container-name shadowgen-web --image cr.yandex/crpal081a5mju2k2amfn/shadowgen-web:20260624-camera2 ...` -> active
 - `git diff --check` -> passed with LF-to-CRLF warnings only
